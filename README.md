@@ -219,6 +219,29 @@ This script expects a Linux environment with the relevant wireless tooling insta
 
 ## Quick Start
 
+### Download / Clone
+
+If you want to download the repository into a new folder:
+
+```bash
+git clone https://github.com/rotem-zacaim/Zacaim-WiFi-Tool.git
+cd Zacaim-WiFi-Tool
+```
+
+If you already have an existing empty folder and want to place the repository there:
+
+```bash
+cd /path/to/existing-folder
+git clone https://github.com/rotem-zacaim/Zacaim-WiFi-Tool.git .
+```
+
+If the folder already exists as a Git working tree for this project:
+
+```bash
+cd /path/to/Zacaim-WiFi-Tool
+git pull origin main
+```
+
 ### Interactive CLI
 
 ```bash
