@@ -11,18 +11,20 @@ from datetime import datetime
 from typing import Any
 
 try:
-    from rich.console import Console
+    from rich.columns import Columns
+    from rich.console import Console, Group
     from rich.panel import Panel
     from rich.rule import Rule
     from rich.table import Table
+    from rich.text import Text
 
     RICH_AVAILABLE = True
 except ImportError:
-    Console = Panel = Rule = Table = None  # type: ignore[assignment]
+    Columns = Console = Group = Panel = Rule = Table = Text = None  # type: ignore[assignment]
     RICH_AVAILABLE = False
 
 from .constants import APP_TAGLINE, APP_VERSION
-from .health import HealthChecker
+from .health import HealthChecker, ToolInstaller
 
 
 class Colors:
@@ -58,6 +60,13 @@ BOOT_TITLE_LINES = [
     "╚═╝  ╚═╝ ╚═════╝    ╚═╝   ╚══════╝╚═╝     ╚═╝",
 ]
 BOOT_SUBTITLE = "cyber tools"
+CYBER_LIVE_FEED = [
+    "host telemetry stable",
+    "web recon bus online",
+    "artifact vault mounted",
+    "report engine synchronized",
+    "workspace graph hydrated",
+]
 
 
 def clear_screen() -> None:
@@ -182,6 +191,34 @@ class ConsoleUI:
     @staticmethod
     def _rule(char: str = "-") -> str:
         return char * min(ConsoleUI._width(), 104)
+
+    @staticmethod
+    def _plain_box(title: str, lines: list[str], color: str = Colors.CYAN) -> None:
+        width = min(ConsoleUI._width(), 104)
+        inner = width - 4
+        print(f"{color}+{'-' * (width - 2)}+{Colors.RESET}")
+        print(f"{color}|{Colors.RESET} {title:<{inner}} {color}|{Colors.RESET}")
+        print(f"{color}+{'-' * (width - 2)}+{Colors.RESET}")
+        for line in lines:
+            print(f"{color}|{Colors.RESET} {line:<{inner}} {color}|{Colors.RESET}")
+        print(f"{color}+{'-' * (width - 2)}+{Colors.RESET}")
+
+    @staticmethod
+    def _command_catalog() -> list[tuple[str, str, str]]:
+        return [
+            ("01", "Tool Readiness", "review runtime tools and install supported missing packages"),
+            ("02", "Web Recon", "run safe, standard, or deep web discovery profiles"),
+            ("03", "Host Recon", "map exposed services and enrich discovered endpoints"),
+            ("04", "Engagement Init", "create a scoped workspace for a new operation"),
+            ("05", "Engagements", "review registered workspaces and their current state"),
+            ("06", "Target Registry", "add targets and bind them to an engagement"),
+            ("07", "Target Views", "review targets, counts, and stored context"),
+            ("08", "Engagement Scan", "run one target or all registered targets in scope"),
+            ("09", "Notes", "attach operator notes and short observations"),
+            ("10", "Evidence", "store text evidence or copy local files into the vault"),
+            ("11", "WiFi Status", "inspect local wireless adapter readiness"),
+            ("12", "Exit", "close the operator console"),
+        ]
 
     @staticmethod
     def _clear_ansi() -> None:
@@ -345,6 +382,7 @@ class ConsoleUI:
 
     @staticmethod
     def health_view(payload: dict[str, object]) -> None:
+        install_plan = ToolInstaller.assess_missing(payload)
         if ConsoleUI.use_rich():
             env = Table(box=None, expand=True, show_header=False)
             env.add_column("key", style="cyan", width=14)
@@ -363,6 +401,22 @@ class ConsoleUI:
                 tools.add_row(str(tool), state, str(location or "-"))
             ConsoleUI._rich_console.print(Panel(env, title="[bold]Environment[/bold]", border_style="magenta"))
             ConsoleUI._rich_console.print(tools)
+            if install_plan["supported_tools"] or install_plan["unsupported_tools"]:
+                install_body: list[str] = []
+                if install_plan["supported_tools"]:
+                    install_body.append(
+                        "Auto-installable: "
+                        + ", ".join(
+                            f"{tool} -> {install_plan['package_notes'][tool]}"
+                            for tool in install_plan["supported_tools"]
+                        )
+                    )
+                if install_plan["unsupported_tools"]:
+                    install_body.append("Manual setup: " + ", ".join(install_plan["unsupported_tools"]))
+                install_body.append("Action: press I after this screen to install supported missing packages.")
+                ConsoleUI._rich_console.print(
+                    Panel("\n".join(install_body), title="[bold]Install Options[/bold]", border_style="yellow")
+                )
             return
         ConsoleUI.section("Environment")
         print(f"{Colors.BLUE}Python:{Colors.RESET} {payload['python']}")
@@ -375,6 +429,17 @@ class ConsoleUI:
             state = location if location else "missing"
             color = Colors.GREEN if location else Colors.RED
             print(f"  - {tool:<10} {color}{state}{Colors.RESET}")
+        if install_plan["supported_tools"] or install_plan["unsupported_tools"]:
+            ConsoleUI.section("Install Options")
+            if install_plan["supported_tools"]:
+                print("- Auto-installable packages:")
+                for tool in install_plan["supported_tools"]:
+                    print(f"  {tool} -> {install_plan['package_notes'][tool]}")
+            if install_plan["unsupported_tools"]:
+                print("- Manual setup still required:")
+                for tool in install_plan["unsupported_tools"]:
+                    print(f"  {tool} -> {install_plan['manual_notes'][tool]}")
+            print("- Action: press I to install supported missing packages.")
 
     @staticmethod
     def dashboard(manager: Any) -> None:
@@ -385,13 +450,76 @@ class ConsoleUI:
         config = read_json(CONFIG_FILE, {})
         available_tools = sum(1 for location in config.get("tools", {}).values() if location)
         total_tools = len(config.get("tools", {})) or len(HealthChecker.REQUIRED_TOOLS) + len(HealthChecker.OPTIONAL_TOOLS)
-        body = {
-            "engagements": len(engagements),
-            "sessions": sessions_count,
-            "tools_ready": f"{available_tools}/{total_tools}",
-            "mode": "interactive workstation",
-        }
-        ConsoleUI.print_record("Workspace", body)
+        missing_tools = total_tools - available_tools
+
+        if ConsoleUI.use_rich():
+            kpi_panels = [
+                Panel(
+                    f"[bold cyan]{len(engagements)}[/bold cyan]\n[white]engagements loaded[/white]",
+                    title="[bold]Workspace[/bold]",
+                    border_style="cyan",
+                    padding=(1, 2),
+                ),
+                Panel(
+                    f"[bold green]{sessions_count}[/bold green]\n[white]sessions indexed[/white]",
+                    title="[bold]Sessions[/bold]",
+                    border_style="green",
+                    padding=(1, 2),
+                ),
+                Panel(
+                    f"[bold yellow]{available_tools}/{total_tools}[/bold yellow]\n[white]tools online[/white]",
+                    title="[bold]Toolchain[/bold]",
+                    border_style="yellow",
+                    padding=(1, 2),
+                ),
+                Panel(
+                    f"[bold magenta]{missing_tools}[/bold magenta]\n[white]modules missing[/white]",
+                    title="[bold]Attention[/bold]",
+                    border_style="magenta",
+                    padding=(1, 2),
+                ),
+            ]
+            status_table = Table(box=None, show_header=False, expand=True)
+            status_table.add_column("label", style="bold cyan", width=16)
+            status_table.add_column("value", style="white")
+            status_table.add_row("console mode", "cyber dashboard")
+            status_table.add_row("operator state", "awaiting selection")
+            status_table.add_row("telemetry", "live command surface")
+            status_table.add_row("timestamp", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
+            feed = Text()
+            for line in CYBER_LIVE_FEED:
+                feed.append(">> ", style="bold cyan")
+                feed.append(line, style="green")
+                feed.append("\n")
+
+            ConsoleUI._rich_console.print(Rule("[bold cyan]Cyber Dashboard[/bold cyan]", style="cyan"))
+            ConsoleUI._rich_console.print(Columns(kpi_panels, expand=True, equal=True))
+            ConsoleUI._rich_console.print(
+                Columns(
+                    [
+                        Panel(status_table, title="[bold]Control State[/bold]", border_style="blue", padding=(1, 2)),
+                        Panel(feed, title="[bold]Live Feed[/bold]", border_style="bright_cyan", padding=(1, 2)),
+                    ],
+                    expand=True,
+                    equal=True,
+                )
+            )
+            return
+
+        ConsoleUI._plain_box(
+            "CYBER DASHBOARD",
+            [
+                f"engagements loaded : {len(engagements)}",
+                f"sessions indexed   : {sessions_count}",
+                f"tools online       : {available_tools}/{total_tools}",
+                f"modules missing    : {missing_tools}",
+                f"operator state     : awaiting selection",
+                f"timestamp          : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            ],
+            Colors.BLUE,
+        )
+        ConsoleUI._plain_box("LIVE FEED", [f">> {line}" for line in CYBER_LIVE_FEED], Colors.CYAN)
 
     @staticmethod
     def print_engagements(engagements: list[dict[str, object]]) -> None:
@@ -504,16 +632,65 @@ class ConsoleUI:
 
     @staticmethod
     def prompt_main() -> str:
-        print("1. Health Check")
-        print("2. Web URL Scan")
-        print("3. Standalone Host Scan")
-        print("4. Create Engagement")
-        print("5. List Engagements")
-        print("6. Add Target To Engagement")
-        print("7. List Engagement Targets")
-        print("8. Scan Engagement Target(s)")
-        print("9. Add Note")
-        print("10. Add Evidence")
-        print("11. WiFi Status")
-        print("12. Exit")
+        commands = ConsoleUI._command_catalog()
+        if ConsoleUI.use_rich():
+            grid = Table(
+                title="[bold magenta]Quick Actions[/bold magenta]",
+                expand=True,
+                box=None,
+                show_header=False,
+                pad_edge=False,
+            )
+            grid.add_column("left", ratio=1)
+            grid.add_column("right", ratio=1)
+
+            def format_entry(entry: tuple[str, str, str]) -> Text:
+                index, title, description = entry
+                text = Text()
+                text.append(f"[{index}] ", style="bold green")
+                text.append(title, style="bold white")
+                text.append("\n")
+                text.append(description, style="cyan")
+                return text
+
+            midpoint = (len(commands) + 1) // 2
+            left_commands = commands[:midpoint]
+            right_commands = commands[midpoint:]
+            while len(right_commands) < len(left_commands):
+                right_commands.append(("", "", ""))
+
+            for left_entry, right_entry in zip(left_commands, right_commands):
+                left_cell = format_entry(left_entry) if left_entry[0] else Text("")
+                right_cell = format_entry(right_entry) if right_entry[0] else Text("")
+                grid.add_row(left_cell, right_cell)
+
+            ConsoleUI._rich_console.print(grid)
+            ConsoleUI._rich_console.print(
+                Panel(
+                    "[green]host[/green] bus online   [cyan]web[/cyan] bus online   "
+                    "[yellow]installer[/yellow] armed   [magenta]evidence[/magenta] vault mounted",
+                    title="[bold]Ops Rail[/bold]",
+                    border_style="bright_blue",
+                    padding=(0, 1),
+                )
+            )
+        else:
+            ConsoleUI._plain_box(
+                "QUICK ACTIONS",
+                [
+                    f"[{commands[index][0]}] {commands[index][1]:<16}    "
+                    f"[{commands[index + 6][0]}] {commands[index + 6][1]}"
+                    if index + 6 < len(commands)
+                    else f"[{commands[index][0]}] {commands[index][1]}"
+                    for index in range((len(commands) + 1) // 2)
+                ],
+                Colors.GREEN,
+            )
         return IdlePromptStatus("menu input channel live").run_input()
+
+    @staticmethod
+    def prompt_health_action(payload: dict[str, object]) -> str:
+        install_plan = ToolInstaller.assess_missing(payload)
+        if not install_plan["supported_tools"]:
+            return ""
+        return input("\nPress I to install supported missing tools, or Enter to go back: ").strip().lower()

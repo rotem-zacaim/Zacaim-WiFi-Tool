@@ -10,7 +10,7 @@ from typing import Sequence
 from .constants import APP_NAME, HOST_PROFILES, WEB_PROFILES
 from .engagements import EngagementManager
 from .filesystem import ensure_app_dirs
-from .health import HealthChecker, WifiInspector
+from .health import HealthChecker, ToolInstaller, WifiInspector
 from .reports import ReportBuilder
 from .scanners import TargetScanner, WebScanner
 from .ui import ConsoleUI, LiveStatus, clear_screen
@@ -76,7 +76,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=APP_NAME)
     subparsers = parser.add_subparsers(dest="command")
 
-    subparsers.add_parser("health", help="Run dependency and environment checks.")
+    health_parser = subparsers.add_parser("health", help="Review tool readiness and environment status.")
+    health_parser.add_argument("--install-missing", action="store_true", help="Install supported missing packages on apt-based systems.")
 
     scan_parser = subparsers.add_parser("scan", help="Run standalone target enumeration.")
     scan_parser.add_argument("target", help="Target IP address or hostname.")
@@ -162,6 +163,13 @@ def interactive_main() -> None:
                 with LiveStatus("running environment checks", "health check complete"):
                     payload = HealthChecker.run()
                 ConsoleUI.health_view(payload)
+                action = ConsoleUI.prompt_health_action(payload)
+                if action == "i":
+                    clear_screen()
+                    ConsoleUI.banner()
+                    print("Installing supported missing packages...")
+                    install_result = ToolInstaller.install_missing(payload)
+                    ConsoleUI.print_record("Install Result", install_result)
             elif choice == "2":
                 clear_screen()
                 ConsoleUI.banner()
@@ -259,7 +267,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     manager = EngagementManager()
 
     if args.command == "health":
-        run_health_check()
+        payload = run_health_check()
+        if getattr(args, "install_missing", False):
+            result = ToolInstaller.install_missing(payload)
+            if sys.stdout.isatty():
+                ConsoleUI.print_record("Install Result", result)
+            else:
+                print(json.dumps(result, indent=2))
         return 0
 
     if args.command == "scan":
