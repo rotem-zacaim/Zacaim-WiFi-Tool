@@ -1,3 +1,7 @@
 .zacaim_v2/
 __pycache__/
 *.pyc
+.pytest_cache/
+*.egg-info/
+dist/
+build/

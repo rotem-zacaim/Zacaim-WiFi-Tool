@@ -2,12 +2,13 @@
 
 `ZACAIM` is a terminal-first operator workstation for authorized host discovery, web mapping, evidence collection, and engagement reporting.
 
-This repository currently contains two tracks:
+The active product path is now packaged and modular:
 
-- `zacaim_v2.py`: the active CLI workbench
-- `zacaim_wifi_tool.py`: a legacy WiFi-oriented script preserved as a separate path
+- [`zacaim/`](/mnt/c/Users/rotem/Documents/codex/Zacaim-WiFi-Tool/zacaim): active application package
+- [`zacaim_v2.py`](/mnt/c/Users/rotem/Documents/codex/Zacaim-WiFi-Tool/zacaim_v2.py): compatibility wrapper for the packaged CLI
+- [`legacy/`](/mnt/c/Users/rotem/Documents/codex/Zacaim-WiFi-Tool/legacy): archived historical material
 
-The main direction of the project is workflow orchestration and structured analysis, not blind exploit automation.
+The project direction remains workflow orchestration and structured analysis, not exploit automation.
 
 ## Scope
 
@@ -22,68 +23,31 @@ Good fits:
 
 ## Repository Layout
 
-- [`zacaim_v2.py`](/mnt/c/Users/rotem/Documents/codex/Zacaim-WiFi-Tool/zacaim_v2.py): primary CLI workbench
-- [`zacaim_wifi_tool.py`](/mnt/c/Users/rotem/Documents/codex/Zacaim-WiFi-Tool/zacaim_wifi_tool.py): legacy WiFi lab script
-- [`SESSION_HANDOFF.md`](/mnt/c/Users/rotem/Documents/codex/Zacaim-WiFi-Tool/SESSION_HANDOFF.md): project direction and handoff notes
-- [`.gitignore`](/mnt/c/Users/rotem/Documents/codex/Zacaim-WiFi-Tool/.gitignore): ignores local app data and Python cache
+- [`zacaim/app.py`](/mnt/c/Users/rotem/Documents/codex/Zacaim-WiFi-Tool/zacaim/app.py): CLI entrypoint and interactive flows
+- [`zacaim/scanners.py`](/mnt/c/Users/rotem/Documents/codex/Zacaim-WiFi-Tool/zacaim/scanners.py): host and web pipelines
+- [`zacaim/engagements.py`](/mnt/c/Users/rotem/Documents/codex/Zacaim-WiFi-Tool/zacaim/engagements.py): engagement, note, and evidence storage
+- [`zacaim/reports.py`](/mnt/c/Users/rotem/Documents/codex/Zacaim-WiFi-Tool/zacaim/reports.py): markdown and JSON reporting
+- [`tests/`](/mnt/c/Users/rotem/Documents/codex/Zacaim-WiFi-Tool/tests): smoke and logic tests
+- [`SESSION_HANDOFF.md`](/mnt/c/Users/rotem/Documents/codex/Zacaim-WiFi-Tool/SESSION_HANDOFF.md): current direction and implementation notes
+- [`pyproject.toml`](/mnt/c/Users/rotem/Documents/codex/Zacaim-WiFi-Tool/pyproject.toml): packaging and test metadata
 
 ## ZACAIM V2
 
-`zacaim_v2.py` is the main interface and should be treated as the current implementation.
-
-### UX
-
-The CLI now includes:
-
-- animated boot sequence with matrix-style startup visuals
-- modernized logo and landing screen
-- workstation-style dashboard
-- richer scan summaries
-- live progress/status feedback during longer operations
-- optional `rich`-powered rendering when the library is installed
-
-### Core Capabilities
+`ZACAIM V2` is the active implementation and supports:
 
 - environment and tool health checks
-- standalone host scanning with multi-tool enrichment
+- standalone host scanning with profile-driven multi-tool enrichment
 - web automation profiles for authorized HTTP/S targets
 - engagement and target registry management
 - notes and evidence capture
 - structured findings and markdown/JSON reporting
 - local WiFi workspace readiness checks
 
-## Host Scan Pipeline
-
-Host/IP scans are no longer just a minimal `nmap` wrapper. The host workflow can combine:
-
-- `nmap` service and version detection
-- reverse DNS checks with `dig` and `host`
-- `ssh-keyscan` collection for exposed SSH services
-- automatic web endpoint enrichment for HTTP/S-like services
-- optional web-side enrichment on discovered endpoints with:
-  - `httpx`
-  - `whatweb`
-  - `wafw00f`
-  - `katana`
-  - `testssl.sh`
-
-Host reports now track:
-
-- service groups such as `web`, `admin`, `files`, and `database`
-- reverse DNS observations
-- SSH host key material
-- TLS highlights
-- recommended next steps
-
-### Host Scan Profiles
+### Host Profiles
 
 - `quick`
 - `standard`
 - `deep`
-
-## Web Automation Pipeline
-
-`web scan` supports deeper discovery profiles instead of a single shallow fingerprint pass.
 
 ### Web Profiles
 
@@ -91,249 +55,87 @@ Host reports now track:
 - `standard`
 - `deep`
 
-### Web Automation Stages
+### Pipeline Notes
 
-Depending on the profile and installed tooling, the web workflow can include:
+Depending on the installed tooling and selected profile, the application can use:
 
-- HTTP header and body probing with `curl`
-- TLS inspection with `openssl`
-- technology hints with `whatweb`
-- richer probing with `httpx`
-- WAF/WAAP identification with `wafw00f`
-- crawl and endpoint discovery with `katana`
-- TLS review with `testssl.sh`
-- known-path checks for:
-  - `robots.txt`
-  - `sitemap.xml`
-  - `.well-known/security.txt`
-  - `security.txt`
-
-Web reports now include:
-
-- reachable endpoints
-- titles, headers, and technology hints
-- crawl URL counts and crawl samples
-- WAF/CDN hints
-- reachable known paths
-- TLS highlights
-- recommended next steps
-
-## Engagement Workflow
-
-The built-in engagement workflow supports:
-
-- creating engagement workspaces
-- registering targets
-- scanning one target or all targets in scope
-- attaching notes
-- storing text or file evidence
-- retaining latest report artifacts per target
-
-Available commands:
-
-- `engagement init`
-- `engagement list`
-- `engagement add-target`
-- `engagement list-targets`
-- `engagement scan`
-- `note add`
-- `evidence add`
-
-## Reports And Artifacts
-
-Each scan session writes structured output under `.zacaim_v2/`.
-
-Typical layout:
-
-- `artifacts/`: stdout/stderr from individual tools
-- `raw/`: base scan artifacts such as Nmap XML/text
-- `reports/summary.json`
-- `reports/findings.json`
-- `reports/report.md`
-
-The generated report now includes:
-
-- scope metadata
-- service summary
-- host automation summary
-- web automation summary
-- findings and leads
-- recommended next steps
-- command execution results
-
-## Storage Layout
-
-The application stores data under `.zacaim_v2/` in the current environment.
-
-Important paths:
-
-- `.zacaim_v2/sessions/`
-- `.zacaim_v2/engagements/<engagement>/targets/<target>/notes/`
-- `.zacaim_v2/engagements/<engagement>/targets/<target>/evidence/`
-- `.zacaim_v2/engagements/<engagement>/targets/<target>/reports/`
-- `.zacaim_v2/engagements/<engagement>/sessions/`
-
-## Tooling
-
-### Core
-
-- `python3`
-- `curl`
 - `nmap`
-
-### Optional Host And Web Enrichment
-
+- `curl`
 - `openssl`
 - `whatweb`
 - `httpx`
-- `katana`
 - `wafw00f`
+- `katana`
 - `testssl.sh`
 - `dig`
 - `host`
 - `ssh-keyscan`
 
-### Optional CLI UX
+Missing optional tools do not stop execution. The related steps are skipped and recorded in the artifacts and reports.
 
-- `rich`
+## Installation
 
-### Optional Local Wireless Status
-
-- `iw`
-- `nmcli`
-
-Missing optional tools do not stop the CLI. Their related stages are skipped and recorded in the session artifacts/report.
-
-## Legacy WiFi Script
-
-`zacaim_wifi_tool.py` is still present as a separate legacy script and is not the primary code path.
-
-It currently provides a menu-driven wireless lab workflow around Aircrack-ng style tooling, including:
-
-- local environment preparation
-- monitor mode setup
-- live wireless views
-- capture/crack-oriented lab steps
-
-This script expects a Linux environment with the relevant wireless tooling installed and usually requires elevated privileges.
-
-## Quick Start
-
-### Download / Clone
-
-If you want to download the repository into a new folder:
-
-```bash
-git clone https://github.com/rotem-zacaim/Zacaim-WiFi-Tool.git
-cd Zacaim-WiFi-Tool
-```
-
-If you already have an existing empty folder and want to place the repository there:
-
-```bash
-cd /path/to/existing-folder
-git clone https://github.com/rotem-zacaim/Zacaim-WiFi-Tool.git .
-```
-
-If the folder already exists as a Git working tree for this project:
-
-```bash
-cd /path/to/Zacaim-WiFi-Tool
-git pull origin main
-```
-
-### Interactive CLI
+### Run Directly
 
 ```bash
 python3 zacaim_v2.py
 ```
 
-### Health Check
+### Run As A Module
+
+```bash
+python3 -m zacaim
+```
+
+### Install In Editable Mode
+
+```bash
+python3 -m pip install -e .
+```
+
+After that you can use:
+
+```bash
+zacaim health
+```
+
+### Install Optional Developer Extras
+
+```bash
+python3 -m pip install -e ".[dev,rich]"
+```
+
+## Common Commands
 
 ```bash
 python3 zacaim_v2.py health
-```
-
-### Standalone Host Scan
-
-```bash
 python3 zacaim_v2.py scan 10.10.10.10 --profile standard
-```
-
-### Deep Host Scan
-
-```bash
-python3 zacaim_v2.py scan 10.10.10.10 --profile deep
-```
-
-### Web Automation
-
-```bash
-python3 zacaim_v2.py web scan https://example.com --profile standard
-```
-
-### Deep Web Automation
-
-```bash
 python3 zacaim_v2.py web scan https://example.com --profile deep
+python3 zacaim_v2.py engagement init "Customer Internal"
+python3 zacaim_v2.py engagement add-target customer_internal 10.10.10.10 --name edge-fw
+python3 zacaim_v2.py engagement scan customer_internal --all --profile standard
 ```
 
-### Create Engagement
+## Reports And Artifacts
+
+Application data is stored under `.zacaim_v2/` in the current working directory when writable, with fallback to other writable OS locations if needed.
+
+Typical session layout:
+
+- `artifacts/`: stdout and stderr from external tools
+- `raw/`: source artifacts such as Nmap XML/text
+- `reports/summary.json`
+- `reports/findings.json`
+- `reports/report.md`
+
+## Testing
 
 ```bash
-python3 zacaim_v2.py engagement init thm-demo --description "TryHackMe lab" --scope "Lab only"
+python3 -m unittest discover -s tests -v
 ```
 
-### Register Target
+## Legacy Material
 
-```bash
-python3 zacaim_v2.py engagement add-target thm-demo 10.10.10.11 --name dc --tags windows ad
-```
+The historical WiFi-oriented script is archived under [`legacy/zacaim_wifi_tool.py`](/mnt/c/Users/rotem/Documents/codex/Zacaim-WiFi-Tool/legacy/zacaim_wifi_tool.py).
 
-### Scan Registered Target
-
-```bash
-python3 zacaim_v2.py engagement scan thm-demo --target dc --profile deep
-```
-
-### Add Note
-
-```bash
-python3 zacaim_v2.py note add thm-demo dc "Initial SMB observations" --category enum --tags smb windows
-```
-
-### Add Evidence
-
-```bash
-python3 zacaim_v2.py evidence add thm-demo dc --text "Captured banner" --description "Quick evidence"
-```
-
-### WiFi Workspace Status
-
-```bash
-python3 zacaim_v2.py wifi status
-```
-
-## Environment Notes
-
-The current workspace has been used from WSL-compatible paths. For heavier day-to-day work, keeping the repository inside the Linux home directory in WSL can improve tooling compatibility and performance.
-
-## Verification
-
-Recent local checks used during the latest updates:
-
-- `python3 -m py_compile zacaim_v2.py`
-- `python3 zacaim_v2.py health`
-- `python3 zacaim_v2.py scan 127.0.0.1 --profile quick`
-- `python3 zacaim_v2.py web scan https://example.com --profile safe`
-
-## Next Upgrade Ideas
-
-Strong candidates for the next phase:
-
-- deeper parsers for `httpx`, `katana`, `testssl.sh`, and `nmap` output
-- confidence and severity scoring
-- richer host/service correlation
-- CVE candidate enrichment from product/version fingerprints
-- session diffing and timelines
-- richer `rich` or full TUI layouts for scan review
+The top-level [`zacaim_wifi_tool.py`](/mnt/c/Users/rotem/Documents/codex/Zacaim-WiFi-Tool/zacaim_wifi_tool.py) now only points to the archived location and is intentionally not part of the active product path.
