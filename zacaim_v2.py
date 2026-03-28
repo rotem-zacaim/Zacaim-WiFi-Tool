@@ -31,15 +31,17 @@ from urllib.parse import urlparse
 from xml.etree import ElementTree as ET
 
 try:
-    from rich.console import Console
+    from rich import box
     from rich.columns import Columns
+    from rich.console import Console, Group
+    from rich.live import Live
     from rich.panel import Panel
     from rich.rule import Rule
     from rich.table import Table
     RICH_AVAILABLE = True
 except ImportError:
-    Console = Any  # type: ignore[assignment]
-    Columns = Panel = Rule = Table = None  # type: ignore[assignment]
+    box = Console = Group = Any  # type: ignore[assignment]
+    Columns = Live = Panel = Rule = Table = None  # type: ignore[assignment]
     RICH_AVAILABLE = False
 
 
@@ -1814,6 +1816,42 @@ class ConsoleUI:
         return STATUS_RIBBON_MESSAGES[index % len(STATUS_RIBBON_MESSAGES)]
 
     @staticmethod
+    def _footer_text() -> str:
+        return (
+            "host-pipeline armed   "
+            "web-pipeline armed   "
+            "evidence vault mounted   "
+            "report renderer online"
+        )
+
+    @staticmethod
+    def _rich_status_ribbon() -> Any:
+        return Panel(
+            "[green]host-pipeline armed[/green]   "
+            "[cyan]web-pipeline armed[/cyan]   "
+            "[yellow]evidence vault mounted[/yellow]   "
+            "[magenta]report renderer online[/magenta]",
+            border_style="bright_blue",
+            padding=(0, 1),
+        )
+
+    @staticmethod
+    def _rich_footer_panel() -> Any:
+        return Panel(
+            f"[bold cyan]prompt[/bold cyan] zacaim::ops>   "
+            f"[bold cyan]time[/bold cyan] {ConsoleUI._runtime_stamp()}   "
+            f"[bold cyan]mode[/bold cyan] control-center",
+            border_style="blue",
+            padding=(0, 1),
+            title="[bold green]Console Footer[/bold green]",
+        )
+
+    @staticmethod
+    def _rich_action_panel(title: str, items: List[str], style: str) -> Any:
+        body = Group(*[f"[white]{item}[/white]" for item in items])
+        return Panel(body, title=f"[bold]{title}[/bold]", border_style=style, padding=(1, 2))
+
+    @staticmethod
     def _print_logo_block() -> None:
         width = ConsoleUI._terminal_width()
         logo = [
@@ -1874,13 +1912,8 @@ class ConsoleUI:
             padding=(1, 2),
             title="[bold green]Telemetry[/bold green]",
         )
-        ribbon = Panel(
-            "[green]host-pipeline armed[/green]   [cyan]web-pipeline armed[/cyan]   [yellow]evidence vault mounted[/yellow]   [magenta]report renderer online[/magenta]",
-            border_style="blue",
-            padding=(0, 1),
-        )
         ConsoleUI._rich_console.print(Columns([left, right], expand=True, equal=False))
-        ConsoleUI._rich_console.print(ribbon)
+        ConsoleUI._rich_console.print(ConsoleUI._rich_status_ribbon())
 
     @staticmethod
     def _rich_card(title: str, body_lines: List[str], style: str = "cyan") -> Any:
@@ -2008,7 +2041,7 @@ class ConsoleUI:
         total_tools = len(config.get("tools", {}))
 
         if ConsoleUI.use_rich():
-            cards = [
+            mission_cards = [
                 ConsoleUI._rich_card(
                     "Mission State",
                     [
@@ -2042,14 +2075,9 @@ class ConsoleUI:
                     "blue",
                 ),
             ]
-            ConsoleUI._rich_console.print(Columns(cards, expand=True))
-            ConsoleUI._rich_console.print(
-                Panel(
-                    "[green]telemetry bus stable[/green]   [cyan]host enrichment warm[/cyan]   [yellow]web automation ready[/yellow]   [magenta]idle motion active[/magenta]",
-                    border_style="bright_blue",
-                    padding=(0, 1),
-                )
-            )
+            ConsoleUI._rich_console.print(Rule("[bold cyan]Mission Deck[/bold cyan]", style="cyan"))
+            ConsoleUI._rich_console.print(Columns(mission_cards, expand=True))
+            ConsoleUI._rich_console.print(ConsoleUI._rich_status_ribbon())
             return
 
         ConsoleUI.section("Workspace")
@@ -2069,6 +2097,68 @@ class ConsoleUI:
         print(f"{Colors.BLUE}|{Colors.RESET} {live_line:<{box_width - 2}} {Colors.BLUE}|{Colors.RESET}")
         print(f"{Colors.BLUE}|{Colors.RESET} {'telemetry :: ' + ' | '.join(ConsoleUI._feed_lines(3)):<{box_width - 2}} {Colors.BLUE}|{Colors.RESET}")
         print(f"{Colors.BLUE}+{'-' * box_width}+{Colors.RESET}")
+
+    @staticmethod
+    def main_screen_matrix_effect(cycles: int = 8) -> None:
+        width = min(ConsoleUI._terminal_width(), 104)
+        line_width = max(32, width - 30)
+        lines_count = 4
+
+        if ConsoleUI.use_rich():
+            def build_panel(offset: int, settled: bool = False) -> Any:
+                rows = []
+                for index in range(lines_count):
+                    rows.append(
+                        f"[green]{ConsoleUI._matrix_line(line_width)}[/green] "
+                        f"[cyan]{ConsoleUI._status_line(offset + index)}[/cyan]"
+                    )
+                if settled:
+                    rows.append("")
+                    rows.append("[blue]ambient telemetry stabilized[/blue]")
+                return Panel(
+                    "\n".join(rows),
+                    title="[bold green]Matrix Field[/bold green]",
+                    subtitle="[cyan]live ambient channel[/cyan]",
+                    border_style="green",
+                    padding=(1, 2),
+                )
+
+            with Live(build_panel(0), console=ConsoleUI._rich_console, refresh_per_second=16, transient=False) as live:
+                for cycle in range(cycles):
+                    live.update(build_panel(cycle))
+                    time.sleep(0.08)
+                live.update(build_panel(cycles, settled=True))
+            return
+
+        if not ConsoleUI.supports_animation():
+            ConsoleUI.section("Matrix Field")
+            for index in range(lines_count):
+                print(
+                    f"{Colors.GREEN}{ConsoleUI._matrix_line(line_width)}{Colors.RESET} "
+                    f"{Colors.CYAN}{ConsoleUI._status_line(index)}{Colors.RESET}"
+                )
+            return
+
+        ConsoleUI.section("Matrix Field")
+        printed = False
+        for cycle in range(cycles):
+            rows = []
+            for index in range(lines_count):
+                rows.append(
+                    f"{Colors.GREEN}{ConsoleUI._matrix_line(line_width)}{Colors.RESET} "
+                    f"{Colors.CYAN}{ConsoleUI._status_line(cycle + index)}{Colors.RESET}"
+                )
+            if printed:
+                sys.stdout.write(f"\x1b[{lines_count}F")
+            for row in rows:
+                sys.stdout.write(row.ljust(width) + "\n")
+            sys.stdout.flush()
+            printed = True
+            time.sleep(0.07)
+
+        footer = f"{Colors.BLUE}[ matrix-field ]{Colors.RESET} ambient telemetry stabilized"
+        sys.stdout.write(footer.ljust(width) + "\n")
+        sys.stdout.flush()
 
     @staticmethod
     def ready_pulse(cycles: int = 8) -> None:
@@ -2219,11 +2309,11 @@ class ConsoleUI:
             meta.add_row("Profile", str(summary.get("profile", "n/a")))
             meta.add_row("Session", str(summary.get("session_id", "n/a")))
             meta.add_row("Output", str(summary.get("output_dir", "n/a")))
-            ConsoleUI._rich_console.print(Panel(meta, title="[bold]Scan Summary[/bold]", border_style="cyan"))
+            summary_panel = Panel(meta, title="[bold]Scan Summary[/bold]", border_style="cyan")
 
             services = summary.get("open_services", [])
             if services:
-                service_table = Table(title="Service Matrix", expand=True)
+                service_table = Table(title="Service Matrix", expand=True, box=box.SIMPLE_HEAVY)
                 service_table.add_column("Port", style="bold cyan", justify="right")
                 service_table.add_column("Proto", style="cyan")
                 service_table.add_column("Service", style="white")
@@ -2237,11 +2327,12 @@ class ConsoleUI:
                         str(service.get("product", "") or "-"),
                         str(service.get("version", "") or "-"),
                     )
-                ConsoleUI._rich_console.print(service_table)
+                service_block: Any = service_table
             else:
-                ConsoleUI._rich_console.print(Panel("No services were parsed.", title="Service Matrix", border_style="yellow"))
+                service_block = Panel("No services were parsed.", title="Service Matrix", border_style="yellow")
 
-            panels: List[Any] = []
+            left_panels: List[Any] = [summary_panel, service_block]
+            right_panels: List[Any] = []
             host_observations = summary.get("host_observations", {})
             if host_observations:
                 host_lines = []
@@ -2255,7 +2346,7 @@ class ConsoleUI:
                 for line in host_observations.get("tls_highlights", [])[:4]:
                     host_lines.append("tls: " + line)
                 if host_lines:
-                    panels.append(ConsoleUI._rich_card("Host Automation", host_lines, "magenta"))
+                    left_panels.append(ConsoleUI._rich_card("Host Automation", host_lines, "magenta"))
 
             web_lines = []
             endpoints = summary.get("http_endpoints", [])
@@ -2271,17 +2362,14 @@ class ConsoleUI:
                 if web_observations.get("path_hits"):
                     web_lines.append("known-paths: " + ", ".join(web_observations["path_hits"]))
             if web_lines:
-                panels.append(ConsoleUI._rich_card("Web Automation", web_lines, "cyan"))
+                left_panels.append(ConsoleUI._rich_card("Web Automation", web_lines, "cyan"))
 
             recommended_steps = summary.get("recommended_steps", [])
             if recommended_steps:
-                panels.append(ConsoleUI._rich_card("Next Steps", [f"- {step}" for step in recommended_steps], "green"))
-
-            if panels:
-                ConsoleUI._rich_console.print(Columns(panels, expand=True))
+                right_panels.append(ConsoleUI._rich_card("Next Steps", [f"- {step}" for step in recommended_steps], "green"))
 
             if findings:
-                finding_table = Table(title="Findings", expand=True)
+                finding_table = Table(title="Findings", expand=True, box=box.SIMPLE_HEAVY)
                 finding_table.add_column("Severity", style="bold")
                 finding_table.add_column("Title", style="white")
                 finding_table.add_column("Description", style="yellow", overflow="fold")
@@ -2295,9 +2383,9 @@ class ConsoleUI:
                         "INFO": "blue",
                     }.get(severity, "white")
                     finding_table.add_row(f"[{sev_style}]{severity}[/{sev_style}]", str(finding.get("title", "Untitled")), str(finding.get("description", "")))
-                ConsoleUI._rich_console.print(finding_table)
+                right_panels.append(finding_table)
             else:
-                ConsoleUI._rich_console.print(Panel("No structured findings were generated.", title="Findings", border_style="yellow"))
+                right_panels.append(Panel("No structured findings were generated.", title="Findings", border_style="yellow"))
 
             artifact_table = Table(title="Artifacts", expand=True, box=None)
             artifact_table.add_column("Type", style="bold cyan", width=10)
@@ -2305,7 +2393,18 @@ class ConsoleUI:
             artifact_table.add_row("summary", output["summary_json"])
             artifact_table.add_row("findings", output["findings_json"])
             artifact_table.add_row("report", output["report_md"])
-            ConsoleUI._rich_console.print(artifact_table)
+            right_panels.append(artifact_table)
+
+            deck = Columns(
+                [
+                    Panel(Group(*left_panels), title="[bold cyan]Discovery Deck[/bold cyan]", border_style="cyan"),
+                    Panel(Group(*right_panels), title="[bold green]Analysis Deck[/bold green]", border_style="green"),
+                ],
+                equal=True,
+                expand=True,
+            )
+            ConsoleUI._rich_console.print(deck)
+            ConsoleUI._rich_console.print(ConsoleUI._rich_footer_panel())
             return
 
         ConsoleUI.section("Scan Summary")
@@ -2410,28 +2509,25 @@ class ConsoleUI:
     @staticmethod
     def prompt_main() -> str:
         if ConsoleUI.use_rich():
-            cards = [
-                ConsoleUI._rich_card("1  Health Check", ["verify toolchain", "inspect runtime paths"], "green"),
-                ConsoleUI._rich_card("2  Web Automation", ["safe / standard / deep", "fingerprint + crawl + tls"], "cyan"),
-                ConsoleUI._rich_card("3  Host Scan", ["service mapping", "host enrichment"], "magenta"),
-                ConsoleUI._rich_card("4  Engagement Init", ["create workspace", "set scope and notes"], "yellow"),
-                ConsoleUI._rich_card("5  Engagement Views", ["list engagements", "list targets"], "blue"),
-                ConsoleUI._rich_card("6  Target Registry", ["add target", "scan one or many"], "cyan"),
-                ConsoleUI._rich_card("9  Notes", ["attach notes", "tag observations"], "green"),
-                ConsoleUI._rich_card("10 Evidence", ["store text", "copy files"], "magenta"),
-                ConsoleUI._rich_card("11 WiFi Status", ["adapter readiness", "local wireless view"], "yellow"),
-                ConsoleUI._rich_card("12 Exit", ["close operator console"], "red"),
+            primary_actions = [
+                ConsoleUI._rich_action_panel("1  Health Check", ["verify toolchain", "inspect runtime paths"], "green"),
+                ConsoleUI._rich_action_panel("2  Web Automation", ["safe / standard / deep", "fingerprint + crawl + tls"], "cyan"),
+                ConsoleUI._rich_action_panel("3  Host Scan", ["service mapping", "host enrichment"], "magenta"),
+                ConsoleUI._rich_action_panel("4  Engagement Init", ["create workspace", "set scope and notes"], "yellow"),
+                ConsoleUI._rich_action_panel("5  Engagement Views", ["list engagements", "list targets"], "blue"),
             ]
-            ConsoleUI._rich_console.print(Columns(cards, equal=True, expand=True))
+            secondary_actions = [
+                ConsoleUI._rich_action_panel("6  Target Registry", ["add target", "scan one or many"], "cyan"),
+                ConsoleUI._rich_action_panel("9  Notes", ["attach notes", "tag observations"], "green"),
+                ConsoleUI._rich_action_panel("10 Evidence", ["store text", "copy files"], "magenta"),
+                ConsoleUI._rich_action_panel("11 WiFi Status", ["adapter readiness", "local wireless view"], "yellow"),
+                ConsoleUI._rich_action_panel("12 Exit", ["close operator console"], "red"),
+            ]
+            ConsoleUI._rich_console.print(Rule("[bold cyan]Command Surface[/bold cyan]", style="cyan"))
+            ConsoleUI._rich_console.print(Columns(primary_actions, equal=True, expand=True))
+            ConsoleUI._rich_console.print(Columns(secondary_actions, equal=True, expand=True))
             ConsoleUI._rich_console.print("[dim]Choices 7 and 8 are target listing and engagement scan flows.[/dim]")
-            ConsoleUI._rich_console.print(
-                Panel(
-                    f"[green]{ConsoleUI._status_line(0)}[/green]   [cyan]{ConsoleUI._status_line(1)}[/cyan]   "
-                    f"[yellow]{ConsoleUI._status_line(2)}[/yellow]   [magenta]{ConsoleUI._status_line(3)}[/magenta]",
-                    border_style="bright_black",
-                    padding=(0, 1),
-                )
-            )
+            ConsoleUI._rich_console.print(ConsoleUI._rich_footer_panel())
             return input(f"\n{ConsoleUI._prompt_label()}").strip()
         print("1. Health Check")
         print("2. Web URL Scan")
@@ -2445,6 +2541,7 @@ class ConsoleUI:
         print("10. Add Evidence")
         print("11. WiFi Status")
         print("12. Exit")
+        print(f"{Colors.BLUE}{ConsoleUI._footer_text()}{Colors.RESET}")
         return input(f"\n{ConsoleUI._prompt_label()}").strip()
 
 
@@ -2595,6 +2692,7 @@ def interactive_main() -> None:
         clear_screen()
         ConsoleUI.banner()
         ConsoleUI.dashboard(manager)
+        ConsoleUI.main_screen_matrix_effect()
         ConsoleUI.ready_pulse()
         choice = ConsoleUI.prompt_main()
 
