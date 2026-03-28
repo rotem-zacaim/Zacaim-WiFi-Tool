@@ -1,77 +1,167 @@
 # ZACAIM
 
-`ZACAIM` is a terminal-first security workspace for authorized lab work, internal testing, and customer engagements.
+`ZACAIM` is a terminal-first operator workstation for authorized host discovery, web mapping, evidence collection, and engagement reporting.
 
 This repository currently contains two tracks:
 
-- `zacaim_v2.py`: the main CLI pentest workbench
-- `zacaim_wifi_tool.py`: an older WiFi-oriented script kept as a legacy path
+- `zacaim_v2.py`: the active CLI workbench
+- `zacaim_wifi_tool.py`: a legacy WiFi-oriented script preserved as a separate path
 
-The project direction is centered on operator workflow, evidence capture, and reporting, not blind automation.
+The main direction of the project is workflow orchestration and structured analysis, not blind exploit automation.
 
 ## Scope
 
-Use this repository only on systems, applications, and wireless environments you own or are explicitly authorized to assess.
+Use this repository only on systems, applications, networks, and wireless environments you own or are explicitly authorized to assess.
 
 Good fits:
 
-- local lab environments
-- TryHackMe / HTB style training boxes
-- internal security assessments
+- local labs
+- CTF / training environments
+- internal security testing
 - approved customer engagements
 
-## Current Layout
+## Repository Layout
 
-- [`zacaim_v2.py`](/mnt/c/Users/rotem/Documents/codex/Zacaim-WiFi-Tool/zacaim_v2.py): main CLI workbench
-- [`zacaim_wifi_tool.py`](/mnt/c/Users/rotem/Documents/codex/Zacaim-WiFi-Tool/zacaim_wifi_tool.py): legacy WiFi menu script
-- [`SESSION_HANDOFF.md`](/mnt/c/Users/rotem/Documents/codex/Zacaim-WiFi-Tool/SESSION_HANDOFF.md): project direction and next-phase notes
-- [`.gitignore`](/mnt/c/Users/rotem/Documents/codex/Zacaim-WiFi-Tool/.gitignore): ignores local app data and Python cache artifacts
+- [`zacaim_v2.py`](/mnt/c/Users/rotem/Documents/codex/Zacaim-WiFi-Tool/zacaim_v2.py): primary CLI workbench
+- [`zacaim_wifi_tool.py`](/mnt/c/Users/rotem/Documents/codex/Zacaim-WiFi-Tool/zacaim_wifi_tool.py): legacy WiFi lab script
+- [`SESSION_HANDOFF.md`](/mnt/c/Users/rotem/Documents/codex/Zacaim-WiFi-Tool/SESSION_HANDOFF.md): project direction and handoff notes
+- [`.gitignore`](/mnt/c/Users/rotem/Documents/codex/Zacaim-WiFi-Tool/.gitignore): ignores local app data and Python cache
 
 ## ZACAIM V2
 
-`zacaim_v2.py` is the primary interface and should be treated as the active code path.
+`zacaim_v2.py` is the main interface and should be treated as the current implementation.
 
-### What It Does
+### UX
 
-- animated terminal boot sequence and live-ready dashboard
-- health checks for core tooling
-- standalone host scans
-- low-impact web URL fingerprinting
-- engagement registry and target tracking
-- notes and evidence storage
-- structured findings and markdown/JSON report generation
-- local WiFi workspace status checks
+The CLI now includes:
 
-### CLI Areas
+- animated boot sequence with matrix-style startup visuals
+- modernized logo and landing screen
+- workstation-style dashboard
+- richer scan summaries
+- live progress/status feedback during longer operations
+- optional `rich`-powered rendering when the library is installed
 
-- `health`: validate environment and tool availability
-- `scan`: run host enumeration against an IP or hostname
-- `web scan`: fingerprint an authorized HTTP/S URL
-- `engagement init|list|add-target|list-targets|scan`: manage scoped workspaces and scans
-- `note add`: attach notes to tracked targets
-- `evidence add`: store text or files as evidence
-- `wifi status`: inspect local wireless tool and adapter readiness
+### Core Capabilities
 
-### Interactive Experience
+- environment and tool health checks
+- standalone host scanning with multi-tool enrichment
+- web automation profiles for authorized HTTP/S targets
+- engagement and target registry management
+- notes and evidence capture
+- structured findings and markdown/JSON reporting
+- local WiFi workspace readiness checks
 
-Running `python3 zacaim_v2.py` starts the interactive CLI with:
+## Host Scan Pipeline
 
-- animated startup
-- dashboard summary for sessions and engagements
-- moving status indicator so long-running work feels alive
-- richer scan summaries directly in the terminal
+Host/IP scans are no longer just a minimal `nmap` wrapper. The host workflow can combine:
 
-### Scan Outputs
+- `nmap` service and version detection
+- reverse DNS checks with `dig` and `host`
+- `ssh-keyscan` collection for exposed SSH services
+- automatic web endpoint enrichment for HTTP/S-like services
+- optional web-side enrichment on discovered endpoints with:
+  - `httpx`
+  - `whatweb`
+  - `wafw00f`
+  - `katana`
+  - `testssl.sh`
 
-Each scan session writes artifacts under `.zacaim_v2/` and typically includes:
+Host reports now track:
 
-- `artifacts/` command stdout/stderr captures
-- `raw/` raw scan output such as Nmap XML/text
+- service groups such as `web`, `admin`, `files`, and `database`
+- reverse DNS observations
+- SSH host key material
+- TLS highlights
+- recommended next steps
+
+### Host Scan Profiles
+
+- `quick`
+- `standard`
+- `deep`
+
+## Web Automation Pipeline
+
+`web scan` supports deeper discovery profiles instead of a single shallow fingerprint pass.
+
+### Web Profiles
+
+- `safe`
+- `standard`
+- `deep`
+
+### Web Automation Stages
+
+Depending on the profile and installed tooling, the web workflow can include:
+
+- HTTP header and body probing with `curl`
+- TLS inspection with `openssl`
+- technology hints with `whatweb`
+- richer probing with `httpx`
+- WAF/WAAP identification with `wafw00f`
+- crawl and endpoint discovery with `katana`
+- TLS review with `testssl.sh`
+- known-path checks for:
+  - `robots.txt`
+  - `sitemap.xml`
+  - `.well-known/security.txt`
+  - `security.txt`
+
+Web reports now include:
+
+- reachable endpoints
+- titles, headers, and technology hints
+- crawl URL counts and crawl samples
+- WAF/CDN hints
+- reachable known paths
+- TLS highlights
+- recommended next steps
+
+## Engagement Workflow
+
+The built-in engagement workflow supports:
+
+- creating engagement workspaces
+- registering targets
+- scanning one target or all targets in scope
+- attaching notes
+- storing text or file evidence
+- retaining latest report artifacts per target
+
+Available commands:
+
+- `engagement init`
+- `engagement list`
+- `engagement add-target`
+- `engagement list-targets`
+- `engagement scan`
+- `note add`
+- `evidence add`
+
+## Reports And Artifacts
+
+Each scan session writes structured output under `.zacaim_v2/`.
+
+Typical layout:
+
+- `artifacts/`: stdout/stderr from individual tools
+- `raw/`: base scan artifacts such as Nmap XML/text
 - `reports/summary.json`
 - `reports/findings.json`
 - `reports/report.md`
 
-### App Storage
+The generated report now includes:
+
+- scope metadata
+- service summary
+- host automation summary
+- web automation summary
+- findings and leads
+- recommended next steps
+- command execution results
+
+## Storage Layout
 
 The application stores data under `.zacaim_v2/` in the current environment.
 
@@ -83,35 +173,49 @@ Important paths:
 - `.zacaim_v2/engagements/<engagement>/targets/<target>/reports/`
 - `.zacaim_v2/engagements/<engagement>/sessions/`
 
-### Tooling
+## Tooling
 
-Core tools:
+### Core
 
 - `python3`
 - `curl`
 - `nmap`
 
-Optional tools:
+### Optional Host And Web Enrichment
 
 - `openssl`
 - `whatweb`
+- `httpx`
+- `katana`
+- `wafw00f`
+- `testssl.sh`
+- `dig`
+- `host`
+- `ssh-keyscan`
+
+### Optional CLI UX
+
+- `rich`
+
+### Optional Local Wireless Status
+
 - `iw`
 - `nmcli`
 
-Missing optional tools do not stop the CLI; their related checks are skipped or downgraded.
+Missing optional tools do not stop the CLI. Their related stages are skipped and recorded in the session artifacts/report.
 
 ## Legacy WiFi Script
 
-`zacaim_wifi_tool.py` is still present as a legacy script and is separate from the main V2 workflow.
+`zacaim_wifi_tool.py` is still present as a separate legacy script and is not the primary code path.
 
-It currently provides a menu-driven wireless lab flow around local Aircrack-ng style tooling, including:
+It currently provides a menu-driven wireless lab workflow around Aircrack-ng style tooling, including:
 
-- environment preparation
+- local environment preparation
 - monitor mode setup
-- live wireless capture views
-- capture/crack-oriented workflow steps
+- live wireless views
+- capture/crack-oriented lab steps
 
-This script expects a Linux environment with the relevant wireless tooling installed and typically requires elevated privileges.
+This script expects a Linux environment with the relevant wireless tooling installed and usually requires elevated privileges.
 
 ## Quick Start
 
@@ -133,10 +237,22 @@ python3 zacaim_v2.py health
 python3 zacaim_v2.py scan 10.10.10.10 --profile standard
 ```
 
-### Web URL Scan
+### Deep Host Scan
 
 ```bash
-python3 zacaim_v2.py web scan https://example.com
+python3 zacaim_v2.py scan 10.10.10.10 --profile deep
+```
+
+### Web Automation
+
+```bash
+python3 zacaim_v2.py web scan https://example.com --profile standard
+```
+
+### Deep Web Automation
+
+```bash
+python3 zacaim_v2.py web scan https://example.com --profile deep
 ```
 
 ### Create Engagement
@@ -151,7 +267,7 @@ python3 zacaim_v2.py engagement init thm-demo --description "TryHackMe lab" --sc
 python3 zacaim_v2.py engagement add-target thm-demo 10.10.10.11 --name dc --tags windows ad
 ```
 
-### Scan Engagement Target
+### Scan Registered Target
 
 ```bash
 python3 zacaim_v2.py engagement scan thm-demo --target dc --profile deep
@@ -177,23 +293,24 @@ python3 zacaim_v2.py wifi status
 
 ## Environment Notes
 
-The current workspace is being used from WSL-compatible paths. For heavier day-to-day work, moving the repository into the Linux home directory inside WSL can improve tool compatibility and performance.
-
-## Project Direction
-
-The strongest next phase for `zacaim_v2.py` is:
-
-- service-specific modules for `web`, `smb`, and `ad`
-- CVE candidate enrichment from product/version fingerprints
-- entity extraction for hosts, domains, users, URLs, and shares
-- stronger findings confidence and validation workflow
-- scan-to-scan correlation and timeline views
+The current workspace has been used from WSL-compatible paths. For heavier day-to-day work, keeping the repository inside the Linux home directory in WSL can improve tooling compatibility and performance.
 
 ## Verification
 
-Recent local checks used during this update:
+Recent local checks used during the latest updates:
 
 - `python3 -m py_compile zacaim_v2.py`
 - `python3 zacaim_v2.py health`
-- `python3 zacaim_v2.py wifi status`
-- `python3 zacaim_v2.py web scan https://example.com`
+- `python3 zacaim_v2.py scan 127.0.0.1 --profile quick`
+- `python3 zacaim_v2.py web scan https://example.com --profile safe`
+
+## Next Upgrade Ideas
+
+Strong candidates for the next phase:
+
+- deeper parsers for `httpx`, `katana`, `testssl.sh`, and `nmap` output
+- confidence and severity scoring
+- richer host/service correlation
+- CVE candidate enrichment from product/version fingerprints
+- session diffing and timelines
+- richer `rich` or full TUI layouts for scan review
