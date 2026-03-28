@@ -38,9 +38,10 @@ try:
     from rich.panel import Panel
     from rich.rule import Rule
     from rich.table import Table
+    from rich.text import Text
     RICH_AVAILABLE = True
 except ImportError:
-    box = Console = Group = Any  # type: ignore[assignment]
+    box = Console = Group = Text = Any  # type: ignore[assignment]
     Columns = Live = Panel = Rule = Table = None  # type: ignore[assignment]
     RICH_AVAILABLE = False
 
@@ -1804,6 +1805,118 @@ class ConsoleUI:
         return " ".join(chunks)[:width]
 
     @staticmethod
+    def _matrix_dimensions(width: int) -> Dict[str, int]:
+        columns = max(26, min(44, (width - 10) // 2))
+        height = 8
+        return {"columns": columns, "height": height}
+
+    @staticmethod
+    def _matrix_cell_style(distance: int) -> str:
+        if distance == 0:
+            return "bold white"
+        if distance <= 1:
+            return "bold bright_green"
+        if distance <= 3:
+            return "green"
+        return "color(28)"
+
+    @staticmethod
+    def _matrix_ansi_prefix(distance: int) -> str:
+        if distance == 0:
+            return "\033[1;97m"
+        if distance <= 1:
+            return "\033[1;92m"
+        if distance <= 3:
+            return Colors.GREEN
+        return "\033[32m"
+
+    @staticmethod
+    def _matrix_char(seed: int) -> str:
+        rng = random.Random(seed)
+        return rng.choice(MATRIX_GLYPHS)
+
+    @staticmethod
+    def _matrix_grid(width: int, tick: int) -> List[List[Dict[str, str]]]:
+        dims = ConsoleUI._matrix_dimensions(width)
+        columns = dims["columns"]
+        height = dims["height"]
+        grid: List[List[Dict[str, str]]] = [
+            [{"char": " ", "style": "", "ansi": ""} for _ in range(columns)] for _ in range(height)
+        ]
+
+        for column in range(columns):
+            speed = 1 + (column % 3)
+            trail = 4 + (column % 5)
+            spacing = height + trail + 5 + (column % 4)
+            origins = [
+                (tick * speed + column * 3) % spacing - trail,
+                ((tick + 5) * (speed + 1) + column * 5) % (spacing + height) - trail - 3,
+            ]
+            for origin in origins:
+                for row in range(height):
+                    distance = row - origin
+                    if not 0 <= distance < trail:
+                        continue
+                    style = ConsoleUI._matrix_cell_style(distance)
+                    ansi = ConsoleUI._matrix_ansi_prefix(distance)
+                    char = ConsoleUI._matrix_char((tick + 1) * 977 + column * 131 + row * 17 + distance)
+                    current = grid[row][column]
+                    if current["style"] == "bold white" and style != "bold white":
+                        continue
+                    grid[row][column] = {"char": char, "style": style, "ansi": ansi}
+
+        return grid
+
+    @staticmethod
+    def _matrix_rich_panel(width: int, tick: int, settled: bool = False) -> Any:
+        grid = ConsoleUI._matrix_grid(width, tick)
+        rows: List[Any] = []
+        for row in grid:
+            line = Text()
+            for cell in row:
+                line.append(cell["char"], style=cell["style"] or "grey35")
+                line.append(" ")
+            rows.append(line)
+
+        rows.append(Text(""))
+        telemetry = Text()
+        telemetry.append("signal  ", style="bold cyan")
+        telemetry.append(ConsoleUI._status_line(tick), style="green")
+        telemetry.append("   ")
+        telemetry.append("stream  ", style="bold cyan")
+        telemetry.append(ConsoleUI._status_line(tick + 1), style="magenta")
+        rows.append(telemetry)
+
+        if settled:
+            stabilized = Text()
+            stabilized.append("ambient telemetry stabilized", style="bold cyan")
+            stabilized.append("  //  ", style="grey50")
+            stabilized.append("matrix bus synchronized", style="green")
+            rows.append(stabilized)
+
+        return Panel(
+            Group(*rows),
+            title="[bold green]Matrix Field[/bold green]",
+            subtitle="[cyan]live ambient channel[/cyan]",
+            border_style="green",
+            padding=(1, 2),
+        )
+
+    @staticmethod
+    def _matrix_plain_rows(width: int, tick: int) -> List[str]:
+        grid = ConsoleUI._matrix_grid(width, tick)
+        rows: List[str] = []
+        for row in grid:
+            rendered = []
+            for cell in row:
+                if cell["char"] == " ":
+                    rendered.append("  ")
+                else:
+                    rendered.append(f"{cell['ansi']}{cell['char']}{Colors.RESET} ")
+            rows.append("".join(rendered).rstrip())
+        return rows
+
+    @staticmethod
     def _runtime_stamp() -> str:
         return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -2099,64 +2212,54 @@ class ConsoleUI:
         print(f"{Colors.BLUE}+{'-' * box_width}+{Colors.RESET}")
 
     @staticmethod
-    def main_screen_matrix_effect(cycles: int = 8) -> None:
+    def main_screen_matrix_effect(cycles: int = 14) -> None:
         width = min(ConsoleUI._terminal_width(), 104)
-        line_width = max(32, width - 30)
-        lines_count = 4
+        dims = ConsoleUI._matrix_dimensions(width)
+        lines_count = dims["height"] + 2
 
         if ConsoleUI.use_rich():
-            def build_panel(offset: int, settled: bool = False) -> Any:
-                rows = []
-                for index in range(lines_count):
-                    rows.append(
-                        f"[green]{ConsoleUI._matrix_line(line_width)}[/green] "
-                        f"[cyan]{ConsoleUI._status_line(offset + index)}[/cyan]"
-                    )
-                if settled:
-                    rows.append("")
-                    rows.append("[blue]ambient telemetry stabilized[/blue]")
-                return Panel(
-                    "\n".join(rows),
-                    title="[bold green]Matrix Field[/bold green]",
-                    subtitle="[cyan]live ambient channel[/cyan]",
-                    border_style="green",
-                    padding=(1, 2),
-                )
-
-            with Live(build_panel(0), console=ConsoleUI._rich_console, refresh_per_second=16, transient=False) as live:
+            with Live(
+                ConsoleUI._matrix_rich_panel(width, 0),
+                console=ConsoleUI._rich_console,
+                refresh_per_second=18,
+                transient=False,
+            ) as live:
                 for cycle in range(cycles):
-                    live.update(build_panel(cycle))
-                    time.sleep(0.08)
-                live.update(build_panel(cycles, settled=True))
+                    live.update(ConsoleUI._matrix_rich_panel(width, cycle))
+                    time.sleep(0.065)
+                live.update(ConsoleUI._matrix_rich_panel(width, cycles, settled=True))
             return
 
         if not ConsoleUI.supports_animation():
             ConsoleUI.section("Matrix Field")
-            for index in range(lines_count):
-                print(
-                    f"{Colors.GREEN}{ConsoleUI._matrix_line(line_width)}{Colors.RESET} "
-                    f"{Colors.CYAN}{ConsoleUI._status_line(index)}{Colors.RESET}"
-                )
+            for row in ConsoleUI._matrix_plain_rows(width, 0):
+                print(row)
+            print(
+                f"{Colors.CYAN}signal{Colors.RESET} {ConsoleUI._status_line(0)}   "
+                f"{Colors.MAGENTA}stream{Colors.RESET} {ConsoleUI._status_line(1)}"
+            )
             return
 
         ConsoleUI.section("Matrix Field")
         printed = False
         for cycle in range(cycles):
-            rows = []
-            for index in range(lines_count):
-                rows.append(
-                    f"{Colors.GREEN}{ConsoleUI._matrix_line(line_width)}{Colors.RESET} "
-                    f"{Colors.CYAN}{ConsoleUI._status_line(cycle + index)}{Colors.RESET}"
-                )
+            rows = ConsoleUI._matrix_plain_rows(width, cycle)
+            rows.append(
+                f"{Colors.CYAN}signal{Colors.RESET} {ConsoleUI._status_line(cycle)}   "
+                f"{Colors.MAGENTA}stream{Colors.RESET} {ConsoleUI._status_line(cycle + 1)}"
+            )
             if printed:
                 sys.stdout.write(f"\x1b[{lines_count}F")
             for row in rows:
                 sys.stdout.write(row.ljust(width) + "\n")
             sys.stdout.flush()
             printed = True
-            time.sleep(0.07)
+            time.sleep(0.06)
 
-        footer = f"{Colors.BLUE}[ matrix-field ]{Colors.RESET} ambient telemetry stabilized"
+        footer = (
+            f"{Colors.BLUE}[ matrix-field ]{Colors.RESET} "
+            f"ambient telemetry stabilized :: {ConsoleUI._status_line(cycles)}"
+        )
         sys.stdout.write(footer.ljust(width) + "\n")
         sys.stdout.flush()
 
