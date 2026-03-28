@@ -44,6 +44,8 @@ except ImportError:
 
 
 APP_NAME = "ZACAIM V2 - Pentest Workbench"
+APP_VERSION = "2.4"
+APP_TAGLINE = "Operator Workbench for Host, Web, Evidence, and Reporting Pipelines"
 WEB_PORT_HINTS = {80, 81, 88, 443, 591, 8000, 8008, 8080, 8081, 8088, 8443, 8888}
 LIVE_FRAMES = ["[=   ]", "[==  ]", "[=== ]", "[ ===]", "[  ==]", "[   =]"]
 MATRIX_GLYPHS = "01ABCDEF[]{}<>/$#@&*+=-"
@@ -91,6 +93,23 @@ BOOT_STATUS_LINES = [
     ("host", "binding multi-tool host pipeline"),
     ("web", "binding deep web automation"),
     ("ui", "forging operator console"),
+]
+LIVE_FEED_MESSAGES = [
+    "correlating service graph",
+    "warming artifact index",
+    "hydrating evidence store",
+    "binding live telemetry bus",
+    "staging host enrichment modules",
+    "arming web automation profiles",
+    "syncing engagement registry",
+    "rendering command surfaces",
+]
+STATUS_RIBBON_MESSAGES = [
+    "host-pipeline armed",
+    "web-pipeline armed",
+    "evidence vault mounted",
+    "report renderer online",
+    "telemetry bus stable",
 ]
 
 
@@ -1783,24 +1802,38 @@ class ConsoleUI:
         return " ".join(chunks)[:width]
 
     @staticmethod
+    def _runtime_stamp() -> str:
+        return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    @staticmethod
+    def _feed_lines(count: int = 4) -> List[str]:
+        return random.sample(LIVE_FEED_MESSAGES, k=min(count, len(LIVE_FEED_MESSAGES)))
+
+    @staticmethod
+    def _status_line(index: int) -> str:
+        return STATUS_RIBBON_MESSAGES[index % len(STATUS_RIBBON_MESSAGES)]
+
+    @staticmethod
     def _print_logo_block() -> None:
         width = ConsoleUI._terminal_width()
         logo = [
-            "  ______    ___    _______    ______    ______    ____   ____ ",
-            " |_  _  | .'   `. |_   __ \\ .' ____ \\ .' ____ \\  |_  _| |_  _|",
-            "   \\ \\  / /  .-.  \\  | |__) / | (___ \\_| (___ \\_|   \\ \\   / /  ",
-            "    > `' <| |   | |  |  __ / '.___`-.  '.___`-.     \\ \\ / /   ",
-            "  _/ /'`\\ \\\\  `-'  / _| |  \\ \\|`\\____) ||`\\____) |    \\ ' /    ",
-            " |____||____|`.___.' |____| |___|______.'|______.'      \\_/     ",
+            "   ______    ___    _______    ______    ______    ____   ____  ",
+            "  |_  _  | .'   `. |_   __ \\ .' ____ \\ .' ____ \\  |_  _| |_  _| ",
+            "    \\ \\  / /  .-.  \\  | |__) / | (___ \\_| (___ \\_|   \\ \\   / /  ",
+            "     > `' <| |   | |  |  __ / '.___`-.  '.___`-.     \\ \\ / /   ",
+            "   _/ /'`\\ \\\\  `-'  / _| |  \\ \\|`\\____) ||`\\____) |    \\ ' /    ",
+            "  |____||____|`.___.' |____| |___|______.'|______.'      \\_/     ",
         ]
         print(f"{Colors.CYAN}{ConsoleUI._rule('=')}{Colors.RESET}")
+        print(f"{Colors.GREEN}{('ZACAIM // OPERATOR CONSOLE // v' + APP_VERSION).center(width)}{Colors.RESET}")
+        print(f"{Colors.BLUE}{'live-build :: host + web + evidence + reporting':^{width}}{Colors.RESET}")
+        print(f"{Colors.CYAN}{ConsoleUI._rule('-')}{Colors.RESET}")
         for line in logo:
             print(f"{Colors.CYAN}{line.center(width)}{Colors.RESET}")
-        print(
-            f"{Colors.YELLOW}"
-            f"{'Operator Workbench for Host, Web, Evidence, and Reporting Pipelines'.center(width)}"
-            f"{Colors.RESET}"
-        )
+        print(f"{Colors.YELLOW}{APP_TAGLINE.center(width)}{Colors.RESET}")
+        print(f"{Colors.GREEN}{('telemetry :: ' + ConsoleUI._runtime_stamp()).center(width)}{Colors.RESET}")
+        for line in ConsoleUI._feed_lines(3):
+            print(f"{Colors.BLUE}{('> ' + line).center(width)}{Colors.RESET}")
         print(f"{Colors.CYAN}{ConsoleUI._rule('=')}{Colors.RESET}")
 
     @staticmethod
@@ -1810,23 +1843,44 @@ class ConsoleUI:
             return
         logo_text = "\n".join(
             [
-                "  ______    ___    _______    ______    ______    ____   ____ ",
-                " |_  _  | .'   `. |_   __ \\ .' ____ \\ .' ____ \\  |_  _| |_  _|",
-                "   \\ \\  / /  .-.  \\  | |__) / | (___ \\_| (___ \\_|   \\ \\   / /  ",
-                "    > `' <| |   | |  |  __ / '.___`-.  '.___`-.     \\ \\ / /   ",
-                "  _/ /'`\\ \\\\  `-'  / _| |  \\ \\|`\\____) ||`\\____) |    \\ ' /    ",
-                " |____||____|`.___.' |____| |___|______.'|______.'      \\_/     ",
+                "   ______    ___    _______    ______    ______    ____   ____  ",
+                "  |_  _  | .'   `. |_   __ \\ .' ____ \\ .' ____ \\  |_  _| |_  _| ",
+                "    \\ \\  / /  .-.  \\  | |__) / | (___ \\_| (___ \\_|   \\ \\   / /  ",
+                "     > `' <| |   | |  |  __ / '.___`-.  '.___`-.     \\ \\ / /   ",
+                "   _/ /'`\\ \\\\  `-'  / _| |  \\ \\|`\\____) ||`\\____) |    \\ ' /    ",
+                "  |____||____|`.___.' |____| |___|______.'|______.'      \\_/     ",
             ]
         )
-        ConsoleUI._rich_console.print(
-            Panel.fit(
-                f"[bold cyan]{logo_text}[/bold cyan]\n[bold yellow]Operator Workbench for Host, Web, Evidence, and Reporting Pipelines[/bold yellow]",
-                border_style="bright_cyan",
-                padding=(1, 2),
-                title="[bold green]ZACAIM[/bold green]",
-                subtitle="[cyan]live interface[/cyan]",
-            )
+        left = Panel.fit(
+            f"[bold cyan]{logo_text}[/bold cyan]\n[bold yellow]{APP_TAGLINE}[/bold yellow]",
+            border_style="bright_cyan",
+            padding=(1, 2),
+            title="[bold green]ZACAIM // OPERATOR CONSOLE[/bold green]",
+            subtitle="[cyan]live interface[/cyan]",
         )
+        right_lines = [
+            f"[bold cyan]version[/bold cyan]   v{APP_VERSION}",
+            f"[bold cyan]build[/bold cyan]     operator-workbench",
+            f"[bold cyan]clock[/bold cyan]     {ConsoleUI._runtime_stamp()}",
+            f"[bold cyan]mode[/bold cyan]      interactive control center",
+            f"[bold cyan]status[/bold cyan]    [green]online[/green]",
+            "",
+            "[bold magenta]live feed[/bold magenta]",
+        ]
+        right_lines.extend(f"[blue]>[/blue] {line}" for line in ConsoleUI._feed_lines(4))
+        right = Panel(
+            "\n".join(right_lines),
+            border_style="green",
+            padding=(1, 2),
+            title="[bold green]Telemetry[/bold green]",
+        )
+        ribbon = Panel(
+            "[green]host-pipeline armed[/green]   [cyan]web-pipeline armed[/cyan]   [yellow]evidence vault mounted[/yellow]   [magenta]report renderer online[/magenta]",
+            border_style="blue",
+            padding=(0, 1),
+        )
+        ConsoleUI._rich_console.print(Columns([left, right], expand=True, equal=False))
+        ConsoleUI._rich_console.print(ribbon)
 
     @staticmethod
     def _rich_card(title: str, body_lines: List[str], style: str = "cyan") -> Any:
@@ -1879,6 +1933,9 @@ class ConsoleUI:
                 f"\r{Colors.GREEN}[ synced ]{Colors.RESET} {Colors.BOLD}{label:<6}{Colors.RESET} {text:<36}\n"
             )
             sys.stdout.flush()
+        for line in cls._feed_lines(4):
+            print(f"{Colors.BLUE}> {line}{Colors.RESET}")
+            time.sleep(0.03)
 
         time.sleep(0.2)
         clear_screen()
@@ -1953,7 +2010,7 @@ class ConsoleUI:
         if ConsoleUI.use_rich():
             cards = [
                 ConsoleUI._rich_card(
-                    "Workspace",
+                    "Mission State",
                     [
                         f"[bold cyan]engagements[/bold cyan]  {len(engagements)}",
                         f"[bold cyan]sessions[/bold cyan]     {sessions_count}",
@@ -1962,10 +2019,10 @@ class ConsoleUI:
                     "cyan",
                 ),
                 ConsoleUI._rich_card(
-                    "Live Channel",
+                    "Telemetry",
                     [
                         "[green]operator console online[/green]",
-                        f"[yellow]{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}[/yellow]",
+                        f"[yellow]{ConsoleUI._runtime_stamp()}[/yellow]",
                         "[cyan]mode[/cyan] interactive workstation",
                     ],
                     "green",
@@ -1979,8 +2036,20 @@ class ConsoleUI:
                     ],
                     "magenta",
                 ),
+                ConsoleUI._rich_card(
+                    "Live Feed",
+                    [f"[blue]>[/blue] {line}" for line in ConsoleUI._feed_lines(4)],
+                    "blue",
+                ),
             ]
             ConsoleUI._rich_console.print(Columns(cards, expand=True))
+            ConsoleUI._rich_console.print(
+                Panel(
+                    "[green]telemetry bus stable[/green]   [cyan]host enrichment warm[/cyan]   [yellow]web automation ready[/yellow]   [magenta]idle motion active[/magenta]",
+                    border_style="bright_blue",
+                    padding=(0, 1),
+                )
+            )
             return
 
         ConsoleUI.section("Workspace")
@@ -1998,6 +2067,7 @@ class ConsoleUI:
         print(f"{Colors.BLUE}+{'-' * box_width}+{Colors.RESET}")
         print(f"{Colors.BLUE}|{Colors.RESET} {metrics:<{box_width - 2}} {Colors.BLUE}|{Colors.RESET}")
         print(f"{Colors.BLUE}|{Colors.RESET} {live_line:<{box_width - 2}} {Colors.BLUE}|{Colors.RESET}")
+        print(f"{Colors.BLUE}|{Colors.RESET} {'telemetry :: ' + ' | '.join(ConsoleUI._feed_lines(3)):<{box_width - 2}} {Colors.BLUE}|{Colors.RESET}")
         print(f"{Colors.BLUE}+{'-' * box_width}+{Colors.RESET}")
 
     @staticmethod
@@ -2007,15 +2077,16 @@ class ConsoleUI:
             return
         for index in range(cycles):
             frame = LIVE_FRAMES[index % len(LIVE_FRAMES)]
+            status = ConsoleUI._status_line(index)
             sys.stdout.write(
                 f"\r{Colors.GREEN}{''.join(random.choice('01') for _ in range(10))}{Colors.RESET} "
-                f"{Colors.CYAN}{frame}{Colors.RESET} interface ready, waiting for operator input"
+                f"{Colors.CYAN}{frame}{Colors.RESET} interface ready :: {status}"
             )
             sys.stdout.flush()
             time.sleep(0.08)
         sys.stdout.write("\r" + (" " * 96) + "\r")
         sys.stdout.flush()
-        print(f"{Colors.GREEN}[live]{Colors.RESET} interface ready, waiting for operator input")
+        print(f"{Colors.GREEN}[live]{Colors.RESET} interface ready :: {ConsoleUI._status_line(0)}")
 
     @staticmethod
     def print_engagements(engagements: List[Dict[str, Any]]) -> None:
@@ -2353,6 +2424,14 @@ class ConsoleUI:
             ]
             ConsoleUI._rich_console.print(Columns(cards, equal=True, expand=True))
             ConsoleUI._rich_console.print("[dim]Choices 7 and 8 are target listing and engagement scan flows.[/dim]")
+            ConsoleUI._rich_console.print(
+                Panel(
+                    f"[green]{ConsoleUI._status_line(0)}[/green]   [cyan]{ConsoleUI._status_line(1)}[/cyan]   "
+                    f"[yellow]{ConsoleUI._status_line(2)}[/yellow]   [magenta]{ConsoleUI._status_line(3)}[/magenta]",
+                    border_style="bright_black",
+                    padding=(0, 1),
+                )
+            )
             return input(f"\n{ConsoleUI._prompt_label()}").strip()
         print("1. Health Check")
         print("2. Web URL Scan")
