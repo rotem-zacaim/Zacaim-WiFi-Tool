@@ -1917,6 +1917,101 @@ class ConsoleUI:
         return rows
 
     @staticmethod
+    def _pulse_bar(tick: int, width: int = 12, offset: int = 0) -> str:
+        active = (tick + offset) % width
+        cells = []
+        for index in range(width):
+            if index == active:
+                cells.append("■")
+            elif abs(index - active) == 1:
+                cells.append("▪")
+            else:
+                cells.append("·")
+        return "".join(cells)
+
+    @staticmethod
+    def _ticker_line(tick: int) -> str:
+        left = LIVE_FEED_MESSAGES[tick % len(LIVE_FEED_MESSAGES)]
+        right = LIVE_FEED_MESSAGES[(tick + 3) % len(LIVE_FEED_MESSAGES)]
+        return f"{left}   //   {right}"
+
+    @staticmethod
+    def _telemetry_tiles(tick: int) -> List[Dict[str, str]]:
+        return [
+            {
+                "title": "Host Bus",
+                "value": "multi-tool enrichment online",
+                "detail": f"signal {ConsoleUI._pulse_bar(tick, 12, 0)}",
+                "style": "cyan",
+            },
+            {
+                "title": "Web Bus",
+                "value": "deep automation profiles armed",
+                "detail": f"crawl  {ConsoleUI._pulse_bar(tick, 12, 3)}",
+                "style": "green",
+            },
+            {
+                "title": "Evidence Bus",
+                "value": "artifact and note channels synced",
+                "detail": f"vault  {ConsoleUI._pulse_bar(tick, 12, 6)}",
+                "style": "magenta",
+            },
+            {
+                "title": "Console State",
+                "value": "operator control surface ready",
+                "detail": f"await  {ConsoleUI._status_line(tick)}",
+                "style": "yellow",
+            },
+        ]
+
+    @staticmethod
+    def _rich_telemetry_grid(tick: int, settled: bool = False) -> Any:
+        tiles = []
+        for tile in ConsoleUI._telemetry_tiles(tick):
+            body = Text()
+            body.append(tile["value"], style="white")
+            body.append("\n")
+            body.append(tile["detail"], style="cyan" if tile["style"] != "yellow" else "yellow")
+            tiles.append(
+                Panel(
+                    body,
+                    title=f"[bold]{tile['title']}[/bold]",
+                    border_style=tile["style"],
+                    padding=(1, 2),
+                )
+            )
+
+        ticker = Text()
+        ticker.append("activity  ", style="bold cyan")
+        ticker.append(ConsoleUI._ticker_line(tick), style="green")
+        if settled:
+            ticker.append("   ")
+            ticker.append("stable", style="bold cyan")
+
+        return Group(
+            Rule("[bold cyan]Telemetry Grid[/bold cyan]", style="cyan"),
+            Columns(tiles, expand=True, equal=True),
+            Panel(
+                ticker,
+                title="[bold green]Activity Ticker[/bold green]",
+                subtitle="[cyan]live ambient channel[/cyan]",
+                border_style="bright_blue",
+                padding=(0, 1),
+            ),
+        )
+
+    @staticmethod
+    def _plain_telemetry_grid(tick: int) -> List[str]:
+        rows = []
+        for tile in ConsoleUI._telemetry_tiles(tick):
+            rows.append(
+                f"{Colors.CYAN}{tile['title']:<14}{Colors.RESET} "
+                f"{tile['value']:<34} "
+                f"{Colors.GREEN}{tile['detail']}{Colors.RESET}"
+            )
+        return rows
+
+    @staticmethod
     def _runtime_stamp() -> str:
         return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -2212,56 +2307,8 @@ class ConsoleUI:
         print(f"{Colors.BLUE}+{'-' * box_width}+{Colors.RESET}")
 
     @staticmethod
-    def main_screen_matrix_effect(cycles: int = 14) -> None:
-        width = min(ConsoleUI._terminal_width(), 104)
-        dims = ConsoleUI._matrix_dimensions(width)
-        lines_count = dims["height"] + 2
-
-        if ConsoleUI.use_rich():
-            with Live(
-                ConsoleUI._matrix_rich_panel(width, 0),
-                console=ConsoleUI._rich_console,
-                refresh_per_second=18,
-                transient=False,
-            ) as live:
-                for cycle in range(cycles):
-                    live.update(ConsoleUI._matrix_rich_panel(width, cycle))
-                    time.sleep(0.065)
-                live.update(ConsoleUI._matrix_rich_panel(width, cycles, settled=True))
-            return
-
-        if not ConsoleUI.supports_animation():
-            ConsoleUI.section("Matrix Field")
-            for row in ConsoleUI._matrix_plain_rows(width, 0):
-                print(row)
-            print(
-                f"{Colors.CYAN}signal{Colors.RESET} {ConsoleUI._status_line(0)}   "
-                f"{Colors.MAGENTA}stream{Colors.RESET} {ConsoleUI._status_line(1)}"
-            )
-            return
-
-        ConsoleUI.section("Matrix Field")
-        printed = False
-        for cycle in range(cycles):
-            rows = ConsoleUI._matrix_plain_rows(width, cycle)
-            rows.append(
-                f"{Colors.CYAN}signal{Colors.RESET} {ConsoleUI._status_line(cycle)}   "
-                f"{Colors.MAGENTA}stream{Colors.RESET} {ConsoleUI._status_line(cycle + 1)}"
-            )
-            if printed:
-                sys.stdout.write(f"\x1b[{lines_count}F")
-            for row in rows:
-                sys.stdout.write(row.ljust(width) + "\n")
-            sys.stdout.flush()
-            printed = True
-            time.sleep(0.06)
-
-        footer = (
-            f"{Colors.BLUE}[ matrix-field ]{Colors.RESET} "
-            f"ambient telemetry stabilized :: {ConsoleUI._status_line(cycles)}"
-        )
-        sys.stdout.write(footer.ljust(width) + "\n")
-        sys.stdout.flush()
+    def main_screen_matrix_effect(cycles: int = 0) -> None:
+        return
 
     @staticmethod
     def ready_pulse(cycles: int = 8) -> None:
@@ -2796,7 +2843,6 @@ def interactive_main() -> None:
         ConsoleUI.banner()
         ConsoleUI.dashboard(manager)
         ConsoleUI.main_screen_matrix_effect()
-        ConsoleUI.ready_pulse()
         choice = ConsoleUI.prompt_main()
 
         try:
