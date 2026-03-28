@@ -11,8 +11,10 @@ from datetime import datetime
 from typing import Any
 
 try:
+    from rich import box
     from rich.columns import Columns
     from rich.console import Console, Group
+    from rich.live import Live
     from rich.panel import Panel
     from rich.rule import Rule
     from rich.table import Table
@@ -20,7 +22,7 @@ try:
 
     RICH_AVAILABLE = True
 except ImportError:
-    Columns = Console = Group = Panel = Rule = Table = Text = None  # type: ignore[assignment]
+    box = Columns = Console = Group = Live = Panel = Rule = Table = Text = None  # type: ignore[assignment]
     RICH_AVAILABLE = False
 
 from .constants import APP_TAGLINE, APP_VERSION
@@ -67,6 +69,13 @@ CYBER_LIVE_FEED = [
     "report engine synchronized",
     "workspace graph hydrated",
 ]
+CHECK_STATUS_STYLES = {
+    "pending": ("[ ]", "grey50"),
+    "running": ("[>]", "bold cyan"),
+    "done": ("[x]", "green"),
+    "skipped": ("[-]", "yellow"),
+    "error": ("[!]", "red"),
+}
 
 
 def clear_screen() -> None:
@@ -170,6 +179,142 @@ class IdlePromptStatus:
             self._stop.set()
             if self._thread:
                 self._thread.join(timeout=0.4)
+
+
+class ReconProgress:
+    def __init__(
+        self,
+        target: str,
+        steps: list[dict[str, object]],
+        panel_title: str = "Recon Live",
+        rule_title: str = "Recon Checklist",
+    ):
+        self.target = target
+        self.panel_title = panel_title
+        self.rule_title = rule_title
+        self.steps = [
+            {
+                "id": str(step["id"]),
+                "label": str(step["label"]),
+                "eta": float(step.get("eta", 0.0) or 0.0),
+                "status": "pending",
+                "note": "",
+            }
+            for step in steps
+        ]
+        self.enabled = RICH_AVAILABLE and sys.stdout.isatty() and ConsoleUI._rich_console is not None
+        self._started_at = 0.0
+        self._current_step_started_at = 0.0
+        self._current_step_id = ""
+        self._live: Any = None
+
+    def start(self) -> None:
+        if not self.enabled:
+            return
+        self._started_at = time.time()
+        self._live = Live(self._render(), console=ConsoleUI._rich_console, refresh_per_second=6, transient=True)
+        self._live.start()
+
+    def stop(self) -> None:
+        if self._live is not None:
+            self._live.stop()
+            self._live = None
+
+    def start_step(self, step_id: str, note: str = "") -> None:
+        if not self.enabled:
+            return
+        self._current_step_id = step_id
+        self._current_step_started_at = time.time()
+        for step in self.steps:
+            if step["id"] == step_id:
+                step["status"] = "running"
+                step["note"] = note
+                break
+        self._refresh()
+
+    def finish_step(self, step_id: str, status: str, note: str = "") -> None:
+        if not self.enabled:
+            return
+        for step in self.steps:
+            if step["id"] == step_id:
+                step["status"] = status
+                if note:
+                    step["note"] = note
+                break
+        if self._current_step_id == step_id:
+            self._current_step_id = ""
+            self._current_step_started_at = 0.0
+        self._refresh()
+
+    def _refresh(self) -> None:
+        if self._live is not None:
+            self._live.update(self._render())
+
+    def _elapsed(self) -> float:
+        return max(0.0, time.time() - self._started_at)
+
+    def _current_step_elapsed(self) -> float:
+        if not self._current_step_started_at:
+            return 0.0
+        return max(0.0, time.time() - self._current_step_started_at)
+
+    def _remaining_eta(self) -> float:
+        remaining = 0.0
+        current_elapsed = self._current_step_elapsed()
+        for step in self.steps:
+            if step["status"] == "done":
+                continue
+            if step["status"] == "running":
+                remaining += max(0.0, float(step["eta"]) - current_elapsed)
+            else:
+                remaining += float(step["eta"])
+        return remaining
+
+    def _render(self) -> Any:
+        elapsed = self._elapsed()
+        remaining = self._remaining_eta()
+        summary = Table(box=None, show_header=False, expand=True)
+        summary.add_column("k", style="bold cyan", width=16)
+        summary.add_column("v", style="white")
+        summary.add_row("target", self.target)
+        summary.add_row("elapsed", f"{elapsed:0.1f}s")
+        summary.add_row("estimated left", f"{remaining:0.1f}s")
+        current_label = "idle"
+        current_note = ""
+        for step in self.steps:
+            if step["status"] == "running":
+                current_label = str(step["label"])
+                current_note = str(step.get("note", ""))
+                break
+        summary.add_row("current module", current_label)
+        if current_note:
+            summary.add_row("module note", current_note)
+
+        checklist = Table(expand=True, box=box.SIMPLE_HEAVY)
+        checklist.add_column("State", width=6)
+        checklist.add_column("Module", style="white")
+        checklist.add_column("ETA", justify="right", width=7)
+        checklist.add_column("Note", style="cyan")
+        for step in self.steps:
+            marker, style = CHECK_STATUS_STYLES.get(str(step["status"]), ("[?]", "white"))
+            checklist.add_row(f"[{style}]{marker}[/{style}]", str(step["label"]), f"{float(step['eta']):0.0f}s", str(step.get("note", "")))
+
+        return Panel(
+            Group(summary, Rule(f"[bold magenta]{self.rule_title}[/bold magenta]", style="magenta"), checklist),
+            title=f"[bold cyan]{self.panel_title}[/bold cyan]",
+            border_style="cyan",
+            padding=(1, 2),
+        )
+
+
+class WebScanProgress(ReconProgress):
+    def __init__(self, target: str, steps: list[dict[str, object]]):
+        super().__init__(target, steps, panel_title="Web Scan Live", rule_title="Web Checklist")
+
+
+class HostScanProgress(ReconProgress):
+    def __init__(self, target: str, steps: list[dict[str, object]]):
+        super().__init__(target, steps, panel_title="Host Scan Live", rule_title="Host Checklist")
 
 
 class ConsoleUI:
@@ -610,6 +755,131 @@ class ConsoleUI:
                 print(f"- {service.get('port', 'n/a')}/{service.get('protocol', 'tcp')} | {service.get('service', 'unknown')} {service.get('product', '')} {service.get('version', '')}".rstrip())
         else:
             print("- No services were parsed.")
+
+        host_observations = summary.get("host_observations", {})
+        if host_observations:
+            ConsoleUI.section("Host Summary")
+            if host_observations.get("service_groups"):
+                groups = host_observations["service_groups"]
+                print(
+                    f"- service-groups="
+                    f"web:{groups.get('web', 0)} admin:{groups.get('admin', 0)} "
+                    f"files:{groups.get('files', 0)} database:{groups.get('database', 0)}"
+                )
+            if host_observations.get("port_inventory"):
+                print(f"- naabu-ports={', '.join(host_observations['port_inventory'][:12])}")
+            if host_observations.get("dnsx_records"):
+                print(f"- dnsx={', '.join(host_observations['dnsx_records'][:6])}")
+            if host_observations.get("reverse_dns"):
+                print(f"- reverse-dns={', '.join(host_observations['reverse_dns'][:6])}")
+            if host_observations.get("ssh_host_keys"):
+                print(f"- ssh-keys={len(host_observations['ssh_host_keys'])} collected")
+            if host_observations.get("tls_highlights"):
+                print(f"- tls={'; '.join(host_observations['tls_highlights'][:2])}")
+            if host_observations.get("smb_highlights"):
+                print(f"- smb={'; '.join(host_observations['smb_highlights'][:2])}")
+            if host_observations.get("ldap_highlights"):
+                print(f"- ldap={'; '.join(host_observations['ldap_highlights'][:2])}")
+            if host_observations.get("snmp_highlights"):
+                print(f"- snmp={'; '.join(host_observations['snmp_highlights'][:2])}")
+            if host_observations.get("rdp_highlights"):
+                print(f"- rdp={'; '.join(host_observations['rdp_highlights'][:2])}")
+            if host_observations.get("ike_highlights"):
+                print(f"- ike={'; '.join(host_observations['ike_highlights'][:2])}")
+
+        ConsoleUI.section("Web Summary")
+        for endpoint in summary.get("http_endpoints", []):
+            print(
+                f"- {endpoint.get('url', 'n/a')} | status={endpoint.get('status_code', 'n/a')} | "
+                f"title={endpoint.get('title', 'n/a') or 'n/a'} | server={endpoint.get('server_header', 'n/a') or 'n/a'}"
+            )
+            technologies = ", ".join(endpoint.get("technologies", [])) or "n/a"
+            print(f"  tech={technologies}")
+
+        observations = summary.get("web_observations", {})
+        if observations:
+            if observations.get("waf") or observations.get("cdn") or observations.get("header_score"):
+                print(
+                    f"- waf={observations.get('waf') or 'n/a'} | "
+                    f"cdn={observations.get('cdn') or 'n/a'} | "
+                    f"headers={observations.get('header_score') or 'n/a'}"
+                )
+            if observations.get("cookie_count") is not None or observations.get("redirect_count") is not None:
+                print(
+                    f"- cookies={observations.get('cookie_count', 0)} | "
+                    f"redirects={observations.get('redirect_count', 0)} | "
+                    f"body-words={observations.get('body_word_count', 0)}"
+                )
+            if observations.get("resolved_addresses"):
+                print(f"- resolved={', '.join(observations['resolved_addresses'][:6])}")
+            if observations.get("dnsx_records"):
+                print(f"- dnsx={', '.join(observations['dnsx_records'][:6])}")
+            if observations.get("port_inventory"):
+                print(f"- web-ports={', '.join(observations['port_inventory'][:10])}")
+            if observations.get("certificate_names"):
+                print(f"- cert-names={', '.join(observations['certificate_names'][:6])}")
+            if observations.get("path_hits"):
+                print(f"- known-paths={', '.join(observations['path_hits'])}")
+            if observations.get("subdomains"):
+                print(f"- subdomains={', '.join(observations['subdomains'][:6])}")
+            if observations.get("historical_urls"):
+                print(f"- historical-urls={len(observations['historical_urls'])} | sample={', '.join(observations['historical_urls'][:3])}")
+            if observations.get("forms"):
+                print(f"- forms={len(observations['forms'])} | sample={', '.join(observations['forms'][:3])}")
+            if observations.get("scripts"):
+                print(f"- scripts={len(observations['scripts'])} | sample={', '.join(observations['scripts'][:3])}")
+            if observations.get("page_links"):
+                print(f"- links={len(observations['page_links'])} | sample={', '.join(observations['page_links'][:3])}")
+            if observations.get("html_comments"):
+                print(f"- comments={len(observations['html_comments'])}")
+            if observations.get("emails"):
+                print(f"- emails={', '.join(observations['emails'][:4])}")
+            if observations.get("contacts"):
+                print(f"- contacts={', '.join(observations['contacts'][:4])}")
+            if observations.get("external_domains"):
+                print(f"- external-domains={', '.join(observations['external_domains'][:5])}")
+            if observations.get("route_highlights"):
+                print(f"- route-highlights={', '.join(observations['route_highlights'][:5])}")
+            if observations.get("ffuf_hits"):
+                print(f"- ffuf-hits={', '.join(observations['ffuf_hits'][:4])}")
+            if observations.get("nikto_highlights"):
+                print(f"- nikto={'; '.join(observations['nikto_highlights'][:2])}")
+            if observations.get("robots"):
+                first_robots = observations["robots"][0]
+                print(
+                    f"- robots: disallow={first_robots.get('disallow_count', 0)} "
+                    f"allow={first_robots.get('allow_count', 0)} "
+                    f"user-agents={len(first_robots.get('user_agents', []))}"
+                )
+            if observations.get("sitemaps"):
+                first_sitemap = observations["sitemaps"][0]
+                print(
+                    f"- sitemap: kind={first_sitemap.get('kind', 'invalid')} "
+                    f"url-count={first_sitemap.get('url_count', 0)}"
+                )
+            if observations.get("security_txt"):
+                first_security = observations["security_txt"][0]
+                print(
+                    f"- security.txt: fields={first_security.get('field_count', 0)} "
+                    f"contacts={first_security.get('contact_count', 0)}"
+                )
+            if observations.get("crawl_url_count"):
+                print(f"- crawl-urls={observations['crawl_url_count']} | sample={', '.join(observations.get('crawl_sample', [])[:3])}")
+
+        command_results = summary.get("command_results", [])
+        if command_results:
+            ConsoleUI.section("Execution")
+            done = [item for item in command_results if not item.get("skipped") and item.get("returncode") == 0]
+            skipped = [item for item in command_results if item.get("skipped")]
+            errors = [item for item in command_results if not item.get("skipped") and (item.get("returncode") not in {0, None})]
+            print(
+                f"- completed={len(done)} | skipped={len(skipped)} | "
+                f"errors={len(errors)} | total={len(command_results)}"
+            )
+            if done:
+                print(f"- completed-tools={', '.join(item.get('name', 'n/a') for item in done[:8])}")
+            if skipped:
+                print(f"- skipped-tools={', '.join(item.get('name', 'n/a') for item in skipped[:8])}")
 
         ConsoleUI.section("Findings")
         if findings:

@@ -200,3 +200,29 @@ def parse_sitemap_xml(content: str, source_url: str = "") -> dict[str, object]:
         return result
 
     return result
+
+
+def parse_security_txt(content: str, source_url: str = "") -> dict[str, object]:
+    fields: dict[str, list[str]] = {}
+    interesting_contacts: list[str] = []
+    for raw_line in content.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or ":" not in line:
+            continue
+        field, value = [part.strip() for part in line.split(":", 1)]
+        field_key = field.lower()
+        fields.setdefault(field_key, [])
+        if value and value not in fields[field_key]:
+            fields[field_key].append(value)
+        if field_key == "contact" and value and value not in interesting_contacts:
+            interesting_contacts.append(value)
+
+    return {
+        "url": source_url,
+        "fields": fields,
+        "field_count": len(fields),
+        "contact_count": len(fields.get("contact", [])),
+        "contacts": interesting_contacts[:10],
+        "encryption": fields.get("encryption", [])[:5],
+        "policy": fields.get("policy", [])[:5],
+    }

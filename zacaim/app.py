@@ -13,7 +13,7 @@ from .filesystem import ensure_app_dirs
 from .health import HealthChecker, ToolInstaller, WifiInspector
 from .reports import ReportBuilder
 from .scanners import TargetScanner, WebScanner
-from .ui import ConsoleUI, LiveStatus, clear_screen
+from .ui import ConsoleUI, HostScanProgress, LiveStatus, WebScanProgress, clear_screen
 from .validators import normalize_url
 from .workspace import WorkspaceManager
 
@@ -24,20 +24,20 @@ def run_health_check() -> dict[str, object]:
     return payload
 
 
-def run_standalone_scan(target: str, profile: str) -> dict[str, str]:
+def run_standalone_scan(target: str, profile: str, tracker: object | None = None) -> dict[str, str]:
     ensure_app_dirs()
     session_dir = WorkspaceManager().create_session(target, profile)
     scanner = TargetScanner(session_dir)
-    summary = scanner.scan(target, profile)
+    summary = scanner.scan(target, profile, tracker=tracker)
     return {"session_dir": str(session_dir), **ReportBuilder.build(summary, session_dir)}
 
 
-def run_web_scan(url: str, profile: str = "standard") -> dict[str, str]:
+def run_web_scan(url: str, profile: str = "standard", tracker: object | None = None) -> dict[str, str]:
     ensure_app_dirs()
     normalized = normalize_url(url)
     session_dir = WorkspaceManager().create_session(normalized["host"], f"web_{profile}")
     scanner = WebScanner(session_dir)
-    summary = scanner.scan(url, profile=profile)
+    summary = scanner.scan(url, profile=profile, tracker=tracker)
     return {"session_dir": str(session_dir), **ReportBuilder.build(summary, session_dir)}
 
 
@@ -175,16 +175,18 @@ def interactive_main() -> None:
                 ConsoleUI.banner()
                 url = input("Target URL: ").strip()
                 profile = input("Web profile [standard]: ").strip().lower() or "standard"
-                with LiveStatus("running web automation pipeline", "web automation complete"):
-                    output = run_web_scan(url, profile=profile)
+                progress = WebScanProgress(url, WebScanner.build_progress_plan(url, profile))
+                output = run_web_scan(url, profile=profile, tracker=progress)
+                print("ready web automation complete")
                 ConsoleUI.print_scan_report(output)
             elif choice == "3":
                 clear_screen()
                 ConsoleUI.banner()
                 target = input("Target IP/hostname: ").strip()
                 profile = input("Profile [standard]: ").strip().lower() or "standard"
-                with LiveStatus("running host scan", "host scan complete"):
-                    output = run_standalone_scan(target, profile)
+                progress = HostScanProgress(target, TargetScanner.build_progress_plan(target, profile))
+                output = run_standalone_scan(target, profile, tracker=progress)
+                print("ready host automation complete")
                 ConsoleUI.print_scan_report(output)
             elif choice == "4":
                 clear_screen()
@@ -277,16 +279,24 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.command == "scan":
-        output = run_standalone_scan(args.target, args.profile)
+        tracker: object | None = None
         if sys.stdout.isatty():
+            tracker = HostScanProgress(args.target, TargetScanner.build_progress_plan(args.target, args.profile))
+        output = run_standalone_scan(args.target, args.profile, tracker=tracker)
+        if sys.stdout.isatty():
+            print("ready host automation complete")
             ConsoleUI.print_scan_report(output)
         else:
             print(json.dumps(output, indent=2))
         return 0
 
     if args.command == "web" and args.web_command == "scan":
-        output = run_web_scan(args.url, profile=args.profile)
+        tracker: object | None = None
         if sys.stdout.isatty():
+            tracker = WebScanProgress(args.url, WebScanner.build_progress_plan(args.url, args.profile))
+        output = run_web_scan(args.url, profile=args.profile, tracker=tracker)
+        if sys.stdout.isatty():
+            print("ready web automation complete")
             ConsoleUI.print_scan_report(output)
         else:
             print(json.dumps(output, indent=2))

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 from .filesystem import write_text
@@ -37,6 +38,7 @@ class CommandRunner:
                 name=name,
                 command=command,
                 returncode=None,
+                duration_seconds=0.0,
                 stdout_path=str(stdout_path),
                 stderr_path=str(stderr_path),
                 skipped=True,
@@ -45,6 +47,7 @@ class CommandRunner:
 
         stdout_path.parent.mkdir(parents=True, exist_ok=True)
         with stdout_path.open("w", encoding="utf-8") as stdout_file, stderr_path.open("w", encoding="utf-8") as stderr_file:
+            started_at = time.time()
             try:
                 completed = subprocess.run(
                     command,
@@ -60,6 +63,7 @@ class CommandRunner:
                     name=name,
                     command=command,
                     returncode=completed.returncode,
+                    duration_seconds=time.time() - started_at,
                     stdout_path=str(stdout_path),
                     stderr_path=str(stderr_path),
                 )
@@ -69,6 +73,7 @@ class CommandRunner:
                     name=name,
                     command=command,
                     returncode=None,
+                    duration_seconds=time.time() - started_at,
                     stdout_path=str(stdout_path),
                     stderr_path=str(stderr_path),
                     skipped=True,

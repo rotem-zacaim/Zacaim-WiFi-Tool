@@ -11,6 +11,7 @@ class CommandResult:
     name: str
     command: List[str]
     returncode: Optional[int]
+    duration_seconds: float = 0.0
     stdout_path: Optional[str] = None
     stderr_path: Optional[str] = None
     skipped: bool = False

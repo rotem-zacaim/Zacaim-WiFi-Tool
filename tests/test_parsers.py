@@ -1,6 +1,6 @@
 import unittest
 
-from zacaim.parsers import parse_robots_txt, parse_sitemap_xml
+from zacaim.parsers import parse_robots_txt, parse_security_txt, parse_sitemap_xml
 
 
 class ParsersTest(unittest.TestCase):
@@ -62,6 +62,20 @@ class ParsersTest(unittest.TestCase):
         self.assertEqual(parsed["url_count"], 2)
         self.assertEqual(parsed["lastmod_count"], 1)
         self.assertIn("https://example.com/sitemap-pages.xml", parsed["child_sitemaps"])
+
+    def test_parse_security_txt_extracts_contacts(self) -> None:
+        content = """
+        Contact: mailto:security@example.com
+        Contact: https://example.com/security
+        Policy: https://example.com/policy
+        Encryption: https://example.com/pgp.txt
+        """.strip()
+
+        parsed = parse_security_txt(content, source_url="https://example.com/.well-known/security.txt")
+
+        self.assertEqual(parsed["field_count"], 3)
+        self.assertEqual(parsed["contact_count"], 2)
+        self.assertIn("mailto:security@example.com", parsed["contacts"])
 
 
 if __name__ == "__main__":
